@@ -364,6 +364,7 @@ Realtime::Realtime()
     middleDown = false;
     rightDown = false;
     motionkey = 0;
+
 }
 
 // This function enters the event loop.
@@ -496,7 +497,8 @@ void Realtime::DrawScene()
 
 void Realtime::RayTracerDrawScene()
 {
-	
+	Minimizer mini(shapes);
+	mini
 	//#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
 	for (int y = 0; y < height; y++) {
 
@@ -515,22 +517,25 @@ void Realtime::RayTracerDrawScene()
 			direction.normalize();
 			Ray* ray=new Ray(eye,direction);
 			Intersection frontMost;
-			for (int i = 0; i < objs.size(); i++)
+			for (int i = 0; i < shapes.size(); i++)
 			{
-				if(!objs[i]->material->isLight())
-				objs[i]->shape->Intersect(ray, frontMost);
+				if(!shapes[i]->parent->material->isLight())
+				shapes[i]->Intersect(ray, frontMost);
 			}
 			Color color;
-			if ((x - width / 2) * (x - width / 2) + (y - height / 2) * (y - height / 2) < 100 * 100)
-				color = Color(myrandom(RNGen), myrandom(RNGen), myrandom(RNGen));
-			else if (abs(x - width / 2) < 4 || abs(y - height / 2) < 4)
+			//if ((x - width / 2) * (x - width / 2) + (y - height / 2) * (y - height / 2) < 100 * 100)
+			//	color = Color(myrandom(RNGen), myrandom(RNGen), myrandom(RNGen));
+			//else if (abs(x - width / 2) < 4 || abs(y - height / 2) < 4)
+			//	color = Color(0.0, 0.0, 0.0);
+			//else
+			//	color = Color(1.0, 1.0, 1.0);
+			
+			if (frontMost.objectHit == nullptr)
 				color = Color(0.0, 0.0, 0.0);
 			else
-				color = Color(1.0, 1.0, 1.0);
-			if(frontMost.objectHit == nullptr)
-				color = Color(0.0, 0.0, 0.0);
-			else
-			color = frontMost.objectHit->material->Kd;
+				color = frontMost.N;
+				//color = frontMost.objectHit->material->Kd;
+			//color = Vector3f(frontMost.t/10.0f, frontMost.t/10.0f,frontMost.t/10.0f);
 			
 			ImagePointer[y * width + x] = color;
 		}
@@ -679,6 +684,7 @@ void Realtime::sphere(const Vector3f center, const float r, Material* mat)
 	obj->shape = new Sphere(center, r);
 	obj->shape->parent = obj;
 	objs.push_back(obj);
+	shapes.push_back(obj->shape);
     if (mat->isLight())
         lights.push_back(obj);
 }
@@ -690,6 +696,7 @@ void Realtime::box(const Vector3f base, const Vector3f diag, Material* mat)
 	obj->shape = new Box(base,diag);
 	obj->shape->parent = obj;
 	objs.push_back(obj);
+	shapes.push_back(obj->shape);
     if (mat->isLight())
         lights.push_back(obj);
 }
@@ -717,6 +724,7 @@ void Realtime::cylinder(const Vector3f base, const Vector3f axis, const float ra
 	obj->shape = new Cylinder(base, axis, radius);
 	obj->shape->parent = obj;
 	objs.push_back(obj);
+	shapes.push_back(obj->shape);
     if (mat->isLight())
         lights.push_back(obj);
 }
@@ -724,9 +732,16 @@ void Realtime::cylinder(const Vector3f base, const Vector3f axis, const float ra
 void Realtime::triangleMesh(MeshData* meshdata)
 {
 	Obj* obj = new Obj(meshdata, Matrix4f::Identity(), meshdata->mat);
+	for (int i = 0; i < meshdata->triangles.size(); i++)
+	{
+		Shape* mpShape = new Triangle(meshdata,meshdata->triangles[i].x(), meshdata->triangles[i].y(), meshdata->triangles[i].z());
+		mpShape->parent = obj;
+		shapes.push_back(mpShape);
+	}
 	obj->shape = new Triangle(meshdata);
 	obj->shape->parent = obj;
 	objs.push_back(obj);
+	shapes.push_back(obj->shape);
 	if (meshdata->mat->isLight())
 		lights.push_back(obj);
 }

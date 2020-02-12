@@ -43,7 +43,7 @@ public:
     Vector3f center;
     unsigned int vao;
     Obj(MeshData* m, const Matrix4f& tr, Material* b);
-	Shape* shape;
+	Shape* shape = nullptr;
     void draw();
     Vector3f Center() { return center; }
 };
@@ -99,6 +99,7 @@ public:
     
     std::vector<Obj*> objs;
     std::vector<Obj*> lights;
+	std::vector<Shape*> shapes;
 
     Quaternionf ViewQuaternion() {
         Quaternionf q = angleAxis((tilt-90.0f)*Radians, Vector3f(1,0,0))
