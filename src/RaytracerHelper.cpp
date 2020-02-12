@@ -1,5 +1,7 @@
 #include"RaytracerHelper.h"
 #include "raytrace.h"
+
+
 Ray::Ray(Vector3f q, Vector3f d)
 {
 	Q = q;
@@ -16,7 +18,7 @@ Sphere::Sphere(Vector3f _center, float _radius)
 {
 	center = _center;
 	radius = _radius;
-	boundingBox = Bbox(center - Vector3f(radius, radius, radius), center + Vector3f(radius, radius, radius));
+	hell = Bbox(center - Vector3f(radius, radius, radius), center + Vector3f(radius, radius, radius));
 }
 
 bool Sphere::Intersect(Ray* ray, Intersection& intersection)
@@ -71,7 +73,7 @@ Box::Box(Vector3f corner, Vector3f diagonal)
 	slabb[2].d0 = -corner.z();
 	slabb[2].d1 = -corner.z() - diagonal.z();
 
-	boundingBox = Bbox(corner, corner + diagonal);
+	hell = Bbox(corner, corner + diagonal);
 }
 
 bool Box::Intersect(Ray* ray, Intersection& intersection)
@@ -143,7 +145,7 @@ Cylinder::Cylinder(Vector3f _base, Vector3f _axis, float _radius)
 	maxy = std::max(std::max(BASE.y(), BASE2.y()), std::max(BASE3.y(), BASE4.y()));
 	maxz = std::max(std::max(BASE.z(), BASE2.z()), std::max(BASE3.z(), BASE4.z()));
 
-	boundingBox = Bbox(Vector3f(minx, miny, minz), Vector3f(maxx, maxy, maxz));
+	hell = Bbox(Vector3f(minx, miny, minz), Vector3f(maxx, maxy, maxz));
 
 }
 

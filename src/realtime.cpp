@@ -12,9 +12,10 @@
 #include "realtime.h"
 #include"RaytracerHelper.h"
 #include <random>
+#include"Minimizer.h"
+
 std::mt19937_64 RNGen;
 std::uniform_real_distribution<> myrandom(0.0, 1.0);
-
 
 // Stupid C++ needs callbacks to be static functions.
 static Realtime* globalRealtime = nullptr;
@@ -497,20 +498,18 @@ void Realtime::DrawScene()
 
 void Realtime::RayTracerDrawScene()
 {
-	Minimizer mini(shapes);
-	mini
+	float rx = (ry * width) / height;
+	Vector3f X = rx * orient._transformVector(Vector3f::UnitX());
+	Vector3f Y = ry * orient._transformVector(Vector3f::UnitY());
+	Vector3f Z = -1 * orient._transformVector(Vector3f::UnitZ());
+	
+	//Minimizer mini(shapes.begin(),shapes.end());
 	//#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
 	for (int y = 0; y < height; y++) {
 
 		//fprintf(stderr, "Rendering %4d\r", y);
 		for (int x = 0; x < width; x++) {
 			float dx, dy;
-			float rx = (ry * width) / height;
-
-			Vector3f X = rx * orient._transformVector(Vector3f::UnitX());
-			Vector3f Y = ry * orient._transformVector(Vector3f::UnitY());
-			Vector3f Z = -1 * orient._transformVector(Vector3f::UnitZ());
-
 			dx = 2.0f * (x + 0.5f) / width - 1.0f;
 			dy = 2.0f * (y + 0.5f) / height - 1.0f;
 			Vector3f direction(X * dx + dy * Y + Z);
@@ -738,10 +737,7 @@ void Realtime::triangleMesh(MeshData* meshdata)
 		mpShape->parent = obj;
 		shapes.push_back(mpShape);
 	}
-	obj->shape = new Triangle(meshdata);
-	obj->shape->parent = obj;
 	objs.push_back(obj);
-	shapes.push_back(obj->shape);
 	if (meshdata->mat->isLight())
 		lights.push_back(obj);
 }

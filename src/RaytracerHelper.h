@@ -1,11 +1,8 @@
 #pragma once
 #include <Eigen/StdVector> // For vectors, matrices (2d,3d,4d) and quaternions in f and d precision.
 #include <Eigen/Geometry>
-#include <Eigen_unsupported/Eigen/BVH>
-const float INF = std::numeric_limits<float>::max();
 typedef Eigen::AlignedBox<float, 3> Bbox; // The BV type provided by Eigen
 using namespace Eigen;
-
 
 class Obj;
 class Intersection {
@@ -32,6 +29,7 @@ public:
 	Vector3f eval(float t);
 };
 
+
 class Shape {
 public:
 	Shape() {
@@ -39,7 +37,7 @@ public:
 	}
 	virtual bool Intersect(Ray* ray, Intersection&) { return true; }
 	Obj* parent;
-	Bbox boundingBox;
+	Bbox hell;
 };
 
 class Sphere :public Shape {
@@ -74,12 +72,11 @@ public:
 struct MeshData;
 class Triangle :public Shape {
 public:
-	Triangle(MeshData* meshdata,unsigned int i0, unsigned int i1, unsigned int i2);
+	Triangle(MeshData* meshdata, unsigned int i0, unsigned int i1, unsigned int i2);
 	bool Intersect(Ray* ray, Intersection& intersection);
 	Vector3f v0, v1, v2, n0, n1, n2;
 	Vector2f t0, t1, t2;
 };
-
 
 class Interval {
 public:
@@ -95,40 +92,4 @@ public:
 	void Empty();
 	//void Intersect(void* other);
 	bool Intersect(Ray* ray, Slab slab);
-};
-
-class Minimizer {
-public:
-	Minimizer(std::vector<Shape*> shapes) {
-		Tree.init(shapes.begin, shapes.end);
-	}
-	typedef float Scalar; // KdBVH needs Minimizer::Scalar defined
-	Ray ray;
-	Intersection intersectionInfo;
-	KdBVH<float, 3, Shape*> Tree;
-
-	Bbox bounding_box(const Shape* obj) { return obj->boundingBox; }
-	// Stuff to track the minimal t and its intersection info
-	// Constructor
-	Minimizer(const Ray& r) : ray(r) { ; }
-	// Called by BVMinimize to intersect the ray with a Shape. This
-	// should return the intersection t, but should also track
-	// the minimum t and it's corresponding intersection info.
-	// Return INF to indicate no intersection.
-	float minimumOnObject(Shape* obj) {
-		// t = obj->intersect(ray); // or whatever
-		//… // Keep track the minimal intersection and object
-		//	return t;
-	}
-	// Called by BVMinimize to intersect the ray with a Bbox and
-	// returns the t value. This should be similar to the already
-	// written box (3 slab) intersection. (The difference being: a
-	// distance of zero should be returned if the ray starts within the Bbox.)
-	// Return INF to indicate no intersection.
-	float minimumOnVolume(const Bbox& box)
-	{
-		Vector3f L = box.min(); // Box corner
-		Vector3f U = box.max(); // Box corner
-		//…
-	}
 };
