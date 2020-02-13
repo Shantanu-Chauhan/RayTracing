@@ -499,9 +499,9 @@ void Realtime::DrawScene()
 void Realtime::RayTracerDrawScene()
 {
 	float rx = (ry * width) / height;
-	Vector3f X = rx * orient._transformVector(Vector3f::UnitX());
-	Vector3f Y = ry * orient._transformVector(Vector3f::UnitY());
-	Vector3f Z = -1 * orient._transformVector(Vector3f::UnitZ());
+	Vector3f X = rx * ViewQuaternion()._transformVector(Vector3f::UnitX());
+	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());
+	Vector3f Z = -1 * ViewQuaternion()._transformVector(Vector3f::UnitZ());
 	
 	//Minimizer mini(shapes.begin(),shapes.end());
 	//#pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
@@ -522,19 +522,13 @@ void Realtime::RayTracerDrawScene()
 				shapes[i]->Intersect(ray, frontMost);
 			}
 			Color color;
-			//if ((x - width / 2) * (x - width / 2) + (y - height / 2) * (y - height / 2) < 100 * 100)
-			//	color = Color(myrandom(RNGen), myrandom(RNGen), myrandom(RNGen));
-			//else if (abs(x - width / 2) < 4 || abs(y - height / 2) < 4)
-			//	color = Color(0.0, 0.0, 0.0);
-			//else
-			//	color = Color(1.0, 1.0, 1.0);
 			
 			if (frontMost.objectHit == nullptr)
 				color = Color(0.0, 0.0, 0.0);
 			else
 				color = frontMost.N;
 				//color = frontMost.objectHit->material->Kd;
-			//color = Vector3f(frontMost.t/10.0f, frontMost.t/10.0f,frontMost.t/10.0f);
+				//color = Vector3f(frontMost.t/8.0f, frontMost.t/8.0f,frontMost.t/8.0f);
 			
 			ImagePointer[y * width + x] = color;
 		}

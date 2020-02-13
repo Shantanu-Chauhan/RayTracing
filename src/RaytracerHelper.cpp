@@ -269,9 +269,9 @@ Triangle::Triangle(MeshData* meshdata, unsigned int i0, unsigned int i1, unsigne
 	n1 = meshdata->vertices[i1].nrm;
 	t1 = meshdata->vertices[i1].tex;
 
-	v1 = meshdata->vertices[i2].pnt;
-	n1 = meshdata->vertices[i2].nrm;
-	t1 = meshdata->vertices[i2].tex;
+	v2 = meshdata->vertices[i2].pnt;
+	n2 = meshdata->vertices[i2].nrm;
+	t2 = meshdata->vertices[i2].tex;
 }
 
 bool Triangle::Intersect(Ray* ray, Intersection& intersection)
@@ -287,13 +287,13 @@ bool Triangle::Intersect(Ray* ray, Intersection& intersection)
 		return false;
 	Vector3f S = ray->Q - v0;
 	float u = p.dot(S) / d;
-	if (u < 0 || u>1)
+	if (u < 0.0f || u > 1.0f)
 		//return No Intersection,Ray intersects the plane but outside of E2 edge
 
 		return false;
 	Vector3f q = S.cross(E1);
 	float v = ray->D.dot(q) / d;
-	if (v < 0 || (u + v) >1)
+	if (v < 0 || (u + v) > 1)
 		//return No Intersection,Ray intersects the plane but outside the other edges
 
 		return false;
@@ -306,8 +306,8 @@ bool Triangle::Intersect(Ray* ray, Intersection& intersection)
 	if (t < intersection.t)
 	{
 		intersection.P = ray->eval(t);
-		//intersection.N = (1 - u - v) * n0[i] + u * n1[i] + v * n2[i];
-		intersection.N = E2.cross(E1);
+		intersection.N = (1 - u - v) * n0 + u * n1 + v * n2;
+		//intersection.N = E2.cross(E1);
 		intersection.N.normalize();
 		intersection.UV = (1 - u - v) * t0 + u * t1 + v * t2;
 		intersection.objectHit = this->parent;
@@ -330,7 +330,6 @@ bool Interval::Intersect(Ray* ray, Slab slab)
 	{
 		//plane 0
 		T0 = -(slab.d0 + slab.Normal.dot(ray->Q)) / SlabNormaldotRayD;
-		N0 = -(slab.Normal);
 		//plane 1
 		T1 = -(slab.d1 + slab.Normal.dot(ray->Q)) / SlabNormaldotRayD;
 
