@@ -587,23 +587,23 @@ void Realtime::RayTracerDrawScene()
 				color = Color(0.0, 0.0, 0.0);
 			else
 			{
-				//Vector3f Ia = Vector3f(0.2f, 0.2f, 0.2f);
-				//Vector3f Ii = Vector3f(1.1f, 1.1f, 1.1f);
-				//Vector3f L = lights[0]->center - frontMost->P;
-				//L.normalize();
-				//Vector3f N = frontMost->N;
-				//N.normalize();
-				//Vector3f V = ViewDirection();
-				//V.normalize();
-				//Vector3f H = L + V;
-				//H.normalize();
-				//float NL = std::max(N.dot(L), 0.0f);
-				//float NH = std::max(N.dot(H), 0.0f);
-				//NH = pow(NH, frontMost->objectHit->material->alpha);
-				////color = frontMost->N;
-				//Vector3f C = frontMost->objectHit->material->Kd.cwiseProduct(Ia) + frontMost->objectHit->material->Kd.cwiseProduct(Ii * NL) + frontMost->objectHit->material->Ks.cwiseProduct(Ii * NH);
-				//color = C;
-				color = frontMost->objectHit->material->Kd;
+				Vector3f Ia = Vector3f(0.2f, 0.2f, 0.2f);
+				Vector3f Ii = Vector3f(1.1f, 1.1f, 1.1f);
+				Vector3f L = lights[0]->center - frontMost->P;
+				L.normalize();
+				Vector3f N = frontMost->N;
+				N.normalize();
+				Vector3f V = ViewDirection();
+				V.normalize();
+				Vector3f H = L + V;
+				H.normalize();
+				float NL = std::max(N.dot(L), 0.0f);
+				float NH = std::max(N.dot(H), 0.0f);
+				NH = pow(NH, frontMost->objectHit->material->alpha);
+				//color = frontMost->N;
+				Vector3f C = frontMost->objectHit->material->Kd.cwiseProduct(Ia) + frontMost->objectHit->material->Kd.cwiseProduct(Ii * NL) + frontMost->objectHit->material->Ks.cwiseProduct(Ii * NH);
+				color = C;
+				//color = frontMost->objectHit->material->Kd;
 				//color = Vector3f((frontMost->t-5.0f)/4.0f, (frontMost->t - 5.0f) / 4.0f, (frontMost->t - 5.0f) / 4.0f);
 				//color = frontMost->P;
 			}
