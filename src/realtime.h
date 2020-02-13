@@ -84,6 +84,8 @@ public:
     ShaderProgram lighting;
 	ShaderProgram rayTracer;
 
+	KdBVH<float, 3, Shape*> Tree;
+
 	unsigned int ColorBlockID;
 	unsigned int blockID;
 
@@ -100,6 +102,7 @@ public:
     std::vector<Obj*> objs;
     std::vector<Obj*> lights;
 	std::vector<Shape*> shapes;
+	std::vector<Shape*> BB;
 
     Quaternionf ViewQuaternion() {
         Quaternionf q = angleAxis((tilt-90.0f)*Radians, Vector3f(1,0,0))

@@ -372,6 +372,7 @@ Realtime::Realtime()
 void Realtime::run(Color* image)
 {
 	ImagePointer = image;
+	Tree.init(shapes.begin(), shapes.end());
     cDist = eye.norm();
     glutReshapeWindow(width, height);
     glutMainLoop();
@@ -496,8 +497,18 @@ void Realtime::DrawScene()
 }
 
 
+namespace Eigen
+{
+	Bbox bounding_box(Shape* obj)
+	{
+		return obj->BoundingBox;
+	}
+}
+
 void Realtime::RayTracerDrawScene()
 {
+	//Tree.init(shapes.begin(), shapes.end());
+	//Minimizer mini(shapes.begin(), shapes.end());
 	float rx = (ry * width) / height;
 	Vector3f X = rx * ViewQuaternion()._transformVector(Vector3f::UnitX());
 	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());

@@ -18,7 +18,7 @@ Sphere::Sphere(Vector3f _center, float _radius)
 {
 	center = _center;
 	radius = _radius;
-	hell = Bbox(center - Vector3f(radius, radius, radius), center + Vector3f(radius, radius, radius));
+	BoundingBox = Bbox(center - Vector3f(radius, radius, radius), center + Vector3f(radius, radius, radius));
 }
 
 bool Sphere::Intersect(Ray* ray, Intersection& intersection)
@@ -73,7 +73,7 @@ Box::Box(Vector3f corner, Vector3f diagonal)
 	slabb[2].d0 = -corner.z();
 	slabb[2].d1 = -corner.z() - diagonal.z();
 
-	hell = Bbox(corner, corner + diagonal);
+	BoundingBox = Bbox(corner, corner + diagonal);
 }
 
 bool Box::Intersect(Ray* ray, Intersection& intersection)
@@ -145,7 +145,7 @@ Cylinder::Cylinder(Vector3f _base, Vector3f _axis, float _radius)
 	maxy = std::max(std::max(BASE.y(), BASE2.y()), std::max(BASE3.y(), BASE4.y()));
 	maxz = std::max(std::max(BASE.z(), BASE2.z()), std::max(BASE3.z(), BASE4.z()));
 
-	hell = Bbox(Vector3f(minx, miny, minz), Vector3f(maxx, maxy, maxz));
+	BoundingBox = Bbox(Vector3f(minx, miny, minz), Vector3f(maxx, maxy, maxz));
 
 }
 
@@ -272,6 +272,17 @@ Triangle::Triangle(MeshData* meshdata, unsigned int i0, unsigned int i1, unsigne
 	v2 = meshdata->vertices[i2].pnt;
 	n2 = meshdata->vertices[i2].nrm;
 	t2 = meshdata->vertices[i2].tex;
+
+	float minx, maxx, miny, maxy, minz, maxz;
+	minx = std::min(std::min(v0.x(), v1.x()), v2.x());
+	miny = std::min(std::min(v0.y(), v1.y()), v2.y());
+	minz = std::min(std::min(v0.z(), v1.z()), v2.z());
+							 
+	maxx = std::max(std::max(v0.x(), v1.x()), v2.x());
+	maxy = std::max(std::max(v0.y(), v1.y()), v2.y());
+	maxz = std::max(std::max(v0.z(), v1.z()), v2.z());
+
+	BoundingBox = Bbox(Vector3f(minx, miny, minz), Vector3f(maxx, maxy, maxz));
 }
 
 bool Triangle::Intersect(Ray* ray, Intersection& intersection)
@@ -385,4 +396,3 @@ Interval::Interval(float t0, float t1, Vector3f n0, Vector3f n1)
 	}
 
 }
-
