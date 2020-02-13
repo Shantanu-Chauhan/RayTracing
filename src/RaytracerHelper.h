@@ -61,10 +61,12 @@ public:
 	float d0, d1;	 //Distance from the origin?
 };
 
+class Interval;
 class Box :public Shape {
 public:
 	Box(Vector3f corner, Vector3f diagonal);
 	bool Intersect(Ray* ray, Intersection& intersection);
+	bool IntersectBoundingBox(Ray* ray, Intersection& intersection, Interval& interval);
 	Slab slabb[3];
 };
 
@@ -105,22 +107,23 @@ public:
 
 class Minimizer {
 public:
-	//Minimizer(std::vector<Shape*>::iterator start, std::vector<Shape*>::iterator end) {
-	//	Tree.init(start, end);
-	//};
+	Ray* ray1;
+	Intersection* intersection;
+	
 	typedef float Scalar; // KdBVH needs Minimizer::Scalar defined
-
 	// Stuff to track the minimal t and its intersection info
 	// Constructor
-	//Minimizer(const Ray& r) : ray(r) { ray = r; }
+	Minimizer(Ray* r,Intersection* _intersection ) {
+		ray1 = r;
+		intersection = _intersection;
+	}
 	// Called by BVMinimize to intersect the ray with a Shape. This
 	// should return the intersection t, but should also track
 	// the minimum t and it's corresponding intersection info.
 	// Return INF to indicate no intersection.
 	float minimumOnObject(Shape* obj) {
-		// t = obj->intersect(ray); // or whatever
-		//… // Keep track the minimal intersection and object
-		//	return t;
+		obj->Intersect(ray1,*intersection); // or whatever
+		return intersection->t;
 	}
 	// Called by BVMinimize to intersect the ray with a Bbox and
 	// returns the t value. This should be similar to the already
@@ -129,7 +132,15 @@ public:
 	// Return INF to indicate no intersection.
 	float minimumOnVolume(const Bbox& box)
 	{
-		Vector3f L = box.min(); // Box corner
-		Vector3f U = box.max(); // Box corner
+		Intersection bboxIntersection;
+		Interval check;
+		Vector3f L = box.corner(AlignedBox<float, 3>::BottomLeftFloor); // Box corner
+		Vector3f U = box.diagonal(); // Box corner
+		Box test(L, U);// = new Box(L, U);
+		test.IntersectBoundingBox(ray1, bboxIntersection, check);
+		if (check.T0 == 0.0f && check.T1 == std::numeric_limits<float>::max())
+			return 0.0f;
+		//test->Intersect(ray1, bboxIntersection);
+		return bboxIntersection.t;
 	}
 };

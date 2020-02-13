@@ -61,38 +61,6 @@ void ReadScene(const std::string inName, Scene* scene)
     input.close();
 }
 
-// Write the image as a HDR(RGBE) image.  
-#include "rgbe.h"
-void WriteHdrImage(const std::string outName, const int width, const int height, Color* image)
-{
-    // Turn image from a 2D-bottom-up array of Vector3D to an top-down-array of floats
-    float* data = new float[width*height*3];
-    float* dp = data;
-    for (int y=height-1;  y>=0;  --y) {
-        for (int x=0;  x<width;  ++x) {
-            Color pixel = image[y*width + x];
-            *dp++ = pixel[0];
-            *dp++ = pixel[1];
-            *dp++ = pixel[2]; } }
-
-    // Write image to file in HDR (a.k.a RADIANCE) format
-    rgbe_header_info info;
-    char errbuf[100] = {0};
-
-    FILE* fp  =  fopen(outName.c_str(), "wb");
-    info.valid = false;
-    int r = RGBE_WriteHeader(fp, width, height, &info, errbuf);
-    if (r != RGBE_RETURN_SUCCESS)
-        printf("error: %s\n", errbuf);
-
-    r = RGBE_WritePixels_RLE(fp, data, width,  height, errbuf);
-    if (r != RGBE_RETURN_SUCCESS)
-        printf("error: %s\n", errbuf);
-    fclose(fp);
-    
-    delete data;
-}
-
 ////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
 {
@@ -119,6 +87,6 @@ int main(int argc, char** argv)
     scene->TraceImage(image, 1);
 
     // Write the image
-    WriteHdrImage(hdrName, scene->width, scene->height, image);
+  //  WriteHdrImage(hdrName, scene->width, scene->height, image);
 
 }

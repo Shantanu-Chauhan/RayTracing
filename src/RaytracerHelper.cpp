@@ -127,6 +127,56 @@ bool Box::Intersect(Ray* ray, Intersection& intersection)
 	}
 }
 
+bool Box::IntersectBoundingBox(Ray* ray, Intersection& intersection, Interval& interval)
+{
+	Interval test;
+	for (int i = 0; i < 3; i++)
+	{
+		if (test.Intersect(ray, slabb[i]))
+		{
+			if (test.T0 > interval.T0)
+			{
+				interval.N0 = test.N0;
+				interval.T0 = test.T0;
+			}
+			if (test.T1 < interval.T1)
+			{
+				interval.T1 = test.T1;
+				interval.N1 = test.N1;
+			}
+		}
+	}
+	if (interval.T0 > interval.T1)//no intersection
+		return false;
+	else
+	{
+		if (interval.T0 <= interval.T1 && !signbit(interval.T0))
+		{
+			if (interval.T0 < intersection.t)
+			{
+				intersection.P = ray->eval(interval.T0);
+				intersection.N = interval.N0.normalized();
+				intersection.t = interval.T0;
+				intersection.objectHit = this->parent;
+				return true;
+			}
+		}
+		else if (interval.T1 < interval.T0 && !signbit(interval.T1))
+		{
+			if (interval.T1 < intersection.t)
+			{
+				intersection.P = ray->eval(interval.T1);
+				intersection.N = interval.N1.normalized();
+				intersection.t = interval.T1;
+				intersection.objectHit = this->parent;
+				return true;
+			}
+		}
+		else
+			return false;
+	}
+}
+
 Cylinder::Cylinder(Vector3f _base, Vector3f _axis, float _radius)
 {
 	base = _base;
@@ -277,7 +327,7 @@ Triangle::Triangle(MeshData* meshdata, unsigned int i0, unsigned int i1, unsigne
 	minx = std::min(std::min(v0.x(), v1.x()), v2.x());
 	miny = std::min(std::min(v0.y(), v1.y()), v2.y());
 	minz = std::min(std::min(v0.z(), v1.z()), v2.z());
-							 
+
 	maxx = std::max(std::max(v0.x(), v1.x()), v2.x());
 	maxy = std::max(std::max(v0.y(), v1.y()), v2.y());
 	maxz = std::max(std::max(v0.z(), v1.z()), v2.z());
