@@ -53,6 +53,7 @@ public:
 ////////////////////////////////////////////////////////////////////////
 /// 
 class Ray;
+class Intersection;
 class Realtime
 {
 public:
@@ -129,7 +130,7 @@ public:
     void cylinder(const Vector3f base, const Vector3f axis, const float radius, Material* mat);
 
 	void triangleMesh(MeshData* meshdata);
-
+	Intersection SampleLight();
     Realtime();
     void run(Color* image);
 };

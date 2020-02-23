@@ -39,9 +39,9 @@ bool Sphere::Intersect(Ray* ray, Intersection& intersection)
 	if (T1 < 0.0f && T2 < 0.0f)
 		return false;
 	float resultT = std::numeric_limits<float>::max();
-	if (T1 < T2 && !signbit(T1))
+	if (T1 < T2 && T1>epsilon)
 		resultT = T1;
-	else if (T2 < T1 && !signbit(T2))
+	else if (T2 < T1 && T2>epsilon)
 		resultT = T2;
 
 	if (resultT < intersection.t)
@@ -284,7 +284,7 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 		return false;
 	else
 	{
-		if (solution.T0 <= solution.T1 && !signbit(solution.T0))
+		if (solution.T0 <= solution.T1 && solution.T0> epsilon)
 		{
 			if (solution.T0 < intersection.t)
 			{
@@ -295,7 +295,7 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 				return true;
 			}
 		}
-		else if (solution.T1 < solution.T0 && !signbit(solution.T1))
+		else if (solution.T1 < solution.T0 && solution.T1>epsilon)
 		{
 			if (solution.T1 < intersection.t)
 			{
@@ -360,7 +360,7 @@ bool Triangle::Intersect(Ray* ray, Intersection& intersection)
 
 		return false;
 	float t = E2.dot(q) / d;
-	if (t < 0)
+	if (t < epsilon)
 		//return NoIntersection Ray's negative half intersects triangle 
 
 		return false;

@@ -49,6 +49,7 @@ public:
 	virtual bool Intersect(Ray* ray, Intersection&) { return true; }
 	Obj* parent;
 	Bbox BoundingBox;
+	virtual float Area() { return 0.0f; }
 };
 
 class Sphere :public Shape {
@@ -57,6 +58,10 @@ public:
 	bool Intersect(Ray* ray, Intersection&);
 	Vector3f center;
 	float radius;
+	float Area()
+	{
+		return 4 *3.141 * radius * radius;
+	}
 };
 
 class Slab {
