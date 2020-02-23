@@ -18,6 +18,10 @@ public:
 		t = std::numeric_limits<float>::max();
 		objectHit = nullptr;
 	}
+	~Intersection() {
+		t = std::numeric_limits<float>::max();
+		objectHit = nullptr;
+	}
 	float t;
 	Obj* objectHit;
 	Vector3f P;		//Point of intersection in world coordinates
@@ -116,6 +120,10 @@ public:
 	Minimizer(Ray* r,Intersection* _intersection ) {
 		ray1 = r;
 		intersection = _intersection;
+	}
+	~Minimizer() {
+		ray1 = nullptr;
+		intersection = nullptr;
 	}
 	// Called by BVMinimize to intersect the ray with a Shape. This
 	// should return the intersection t, but should also track

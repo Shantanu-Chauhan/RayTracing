@@ -1,6 +1,6 @@
 #include"RaytracerHelper.h"
 #include "raytrace.h"
-
+const float epsilon = 0.00001f;
 
 Ray::Ray(Vector3f q, Vector3f d)
 {
@@ -100,7 +100,8 @@ bool Box::Intersect(Ray* ray, Intersection& intersection)
 		return false;
 	else
 	{
-		if (solution.T0 <= solution.T1 && !signbit(solution.T0))
+		//if (solution.T0 <= solution.T1 && !signbit(solution.T0))
+		if (solution.T0 <= solution.T1 && solution.T0 > epsilon)
 		{
 			if (solution.T0 < intersection.t)
 			{
@@ -111,7 +112,7 @@ bool Box::Intersect(Ray* ray, Intersection& intersection)
 				return true;
 			}
 		}
-		else if (solution.T1 < solution.T0 && !signbit(solution.T1))
+		else if (solution.T1 < solution.T0 && solution.T1> epsilon)
 		{
 			if (solution.T1 < intersection.t)
 			{
@@ -201,10 +202,10 @@ Cylinder::Cylinder(Vector3f _base, Vector3f _axis, float _radius)
 
 bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 {
-	Ray* test = new Ray();
+	Ray test;// = new Ray();
 	Quaternionf q = Quaternionf::FromTwoVectors(axis, Vector3f::UnitZ());
-	test->Q = q._transformVector(ray->Q - base);
-	test->D = q._transformVector(ray->D);
+	test.Q = q._transformVector(ray->Q - base);
+	test.D = q._transformVector(ray->D);
 
 
 	Interval a0;
@@ -215,14 +216,14 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 	basee.Normal = Vector3f(0.0f, 0.0f, 1.0f);
 	basee.d0 = 0.0f;
 	basee.d1 = -(axis.norm());
-	b0.Intersect(test, basee);
-	float b = 2 * (test->D.x() * test->Q.x() + test->D.y() * test->Q.y());
+	b0.Intersect(&test, basee);
+	float b = 2 * (test.D.x() * test.Q.x() + test.D.y() * test.Q.y());
 
 	float bSq = b * b;
 
-	float a = test->D.x() * test->D.x() + test->D.y() * test->D.y();
+	float a = test.D.x() * test.D.x() + test.D.y() * test.D.y();
 
-	float c = test->Q.x() * test->Q.x() + test->Q.y() * test->Q.y() - (radius * radius);
+	float c = test.Q.x() * test.Q.x() + test.Q.y() * test.Q.y() - (radius * radius);
 
 	float BSQMinus4AC = bSq - (4 * a * c);
 	if (BSQMinus4AC < 0)
@@ -242,8 +243,8 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 	c0.T0 = t0;
 	c0.T1 = t1;
 
-	Vector3f M0 = test->eval(t0);
-	Vector3f M1 = test->eval(t1);
+	Vector3f M0 = test.eval(t0);
+	Vector3f M1 = test.eval(t1);
 	c0.N0 = Vector3f(M0.x(), M0.y(), 0.0f);
 	c0.N1 = Vector3f(M1.x(), M1.y(), 0.0f);
 

@@ -52,6 +52,7 @@ public:
 // Realtime handles all realtime drawing/interaction
 ////////////////////////////////////////////////////////////////////////
 /// 
+class Ray;
 class Realtime
 {
 public:
@@ -114,7 +115,7 @@ public:
     Vector3f ViewDirection() {
         return ViewQuaternion().toRotationMatrix() * Vector3f(0.0f, 0.0f, -1.0f);
     }
-
+	Vector3f Realtime::TracePath(Ray* ray);
     void DrawScene();
 	void RayTracerDrawScene();
     void ReshapeWindow(int w, int h);

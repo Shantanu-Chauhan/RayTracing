@@ -552,6 +552,84 @@ namespace Eigen
 	}
 }
 
+const float RussianRoulette = 0.8f;
+
+
+Vector3f EvalRadiance(Obj* O)
+{
+	return O->material->Kd;
+}
+Vector3f SampleLobe(Vector3f N, float c, float phi)
+{
+	float s = sqrt(1.0f - (c * c));
+	Vector3f K = Vector3f(s * cos(phi), s * sin(phi), c);// Vector centered around Z-axis
+	Quaternionf q = Quaternionf::FromTwoVectors(Vector3f::UnitZ(), N);// q rotates Z to N
+	return q._transformVector(K);// K rotated to N's frame
+}
+Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd)
+{
+	float NdotWiAbs = std::max(N.dot(wi), 0.0f);
+	return NdotWiAbs * Kd / PI;
+}
+
+float PdfBRDF(Vector3f N, Vector3f wi)
+{
+	float NdotWiAbs = std::max(N.dot(wi), 0.0f);
+	return NdotWiAbs / PI;
+}
+
+Vector3f SampleBRDF(Vector3f N)
+{
+	float sai1, sai2;
+	sai1 = myrandom(RNGen);
+	sai2 = myrandom(RNGen);
+	return SampleLobe(N, sqrt(sai1), 2 * PI * sai2);
+}
+Vector3f Realtime::TracePath(Ray* ray)
+{
+	Vector3f C(0.0f, 0.0f, 0.0f);	//Accumulated light
+	Vector3f W(1.0f, 1.0f, 1.0f);	//Accumulated weight
+	Intersection P;// = new Intersection();
+	Intersection Q;// = new Intersection();
+	Minimizer miniP(ray, &P);
+	float minDist = BVMinimize(Tree, miniP);
+	Vector3f N = P.N;
+	if (P.objectHit == nullptr)
+		return C;
+	if (P.objectHit->material->isLight())
+	{
+		return EvalRadiance(P.objectHit);
+	}
+	while (myrandom(RNGen) <= 0.8f)
+	{
+		Vector3f wi = SampleBRDF(N);
+		//wi.normalize();
+		Ray NewRay;
+		NewRay.D = wi;
+		NewRay.Q = P.P;
+		Minimizer miniQ(&NewRay, &Q);
+		float minDist = BVMinimize(Tree, miniQ);
+		if (Q.objectHit == nullptr)
+			break;
+		Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd);
+		float p = PdfBRDF(N, wi) * RussianRoulette;
+		if (p < 0.000001f)
+			break;
+		W = W.cwiseProduct(f) / p;
+		if (Q.objectHit->material->isLight())
+		{
+			C += W.cwiseProduct(EvalRadiance(Q.objectHit));
+			break;
+		}
+		P.N = Q.N;
+		P.objectHit = Q.objectHit;
+		P.P = Q.P;
+		P.t = Q.t;
+		P.UV = Q.UV;
+	}
+	return C;
+}
+
 void Realtime::RayTracerDrawScene()
 {
 	//Tree.init(shapes.begin(), shapes.end());
@@ -560,76 +638,84 @@ void Realtime::RayTracerDrawScene()
 	Vector3f X = rx * ViewQuaternion()._transformVector(Vector3f::UnitX());
 	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());
 	Vector3f Z = -1 * ViewQuaternion()._transformVector(Vector3f::UnitZ());
-
 	//Minimizer mini(shapes.begin(),shapes.end());
+	for (int i = 1; i < 100000; i++)
+	{
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
-	for (int y = 0; y < height; y++) {
+		for (int y = 0; y < height; y++) {
 
-		fprintf(stderr, "Rendering %4d\r", y);
-		for (int x = 0; x < width; x++) {
-			float dx, dy;
-			dx = 2.0f * (x + 0.5f) / width - 1.0f;
-			dy = 2.0f * (y + 0.5f) / height - 1.0f;
-			Vector3f direction(X * dx + dy * Y + Z);
-			direction.normalize();
-			Ray* ray = new Ray(eye, direction);
-			Intersection* frontMost = new Intersection();
-			Minimizer mini(ray, frontMost);
-			float minDist = BVMinimize(Tree, mini);
-			/*for (int i = 0; i < shapes.size(); i++)
-			{
-				if(!shapes[i]->parent->material->isLight())
-				shapes[i]->Intersect(ray, *frontMost);
-			}*/
-			Color color;
+			fprintf(stderr, "Pass : %4d Rendering %4d\r",i, y);
+			for (int x = 0; x < width; x++) {
+				float dx, dy;
+				dx = 2.0f * (x + 0.5f) / width - 1.0f;
+				dy = 2.0f * (y + 0.5f) / height - 1.0f;
+				Vector3f direction(X * dx + dy * Y + Z);
+				direction.normalize();
+				Ray ray;
+				ray.Q = eye;
+				ray.D = direction;
+				//Intersection* frontMost = new Intersection();
+				//Minimizer mini(ray, frontMost);
+				//float minDist = BVMinimize(Tree, mini);
+				/*for (int i = 0; i < shapes.size(); i++)
+				{
+					if(!shapes[i]->parent->material->isLight())
+					shapes[i]->Intersect(ray, *frontMost);
+				}*/
+				Vector3f color;
+				color = TracePath(&ray);
 
-			if (frontMost->objectHit == nullptr)
-				color = Color(0.0, 0.0, 0.0);
-			else
-			{
-				Vector3f Ia = Vector3f(0.2f, 0.2f, 0.2f);
-				Vector3f Ii = Vector3f(1.1f, 1.1f, 1.1f);
-				Vector3f L = lights[0]->center - frontMost->P;
-				L.normalize();
-				Vector3f N = frontMost->N;
-				N.normalize();
-				Vector3f V = ViewDirection();
-				V.normalize();
-				Vector3f H = L + V;
-				H.normalize();
-				float NL = std::max(N.dot(L), 0.0f);
-				float NH = std::max(N.dot(H), 0.0f);
-				NH = pow(NH, frontMost->objectHit->material->alpha);
-				//color = frontMost->N;
-				Vector3f C = frontMost->objectHit->material->Kd.cwiseProduct(Ia) + frontMost->objectHit->material->Kd.cwiseProduct(Ii * NL) + frontMost->objectHit->material->Ks.cwiseProduct(Ii * NH);
-				color = C;
-				//color = frontMost->objectHit->material->Kd;
-				//color = Vector3f((frontMost->t-5.0f)/4.0f, (frontMost->t - 5.0f) / 4.0f, (frontMost->t - 5.0f) / 4.0f);
-				//color = frontMost->P;
+				//if (frontMost->objectHit == nullptr)
+				//	color = Color(0.0, 0.0, 0.0);
+				//else
+				//{
+				//	Vector3f Ia = Vector3f(0.2f, 0.2f, 0.2f);
+				//	Vector3f Ii = Vector3f(1.1f, 1.1f, 1.1f);
+				//	Vector3f L = lights[0]->center - frontMost->P;
+				//	L.normalize();
+				//	Vector3f N = frontMost->N;
+				//	N.normalize();
+				//	Vector3f V = ViewDirection();
+				//	V.normalize();
+				//	Vector3f H = L + V;
+				//	H.normalize();
+				//	float NL = std::max(N.dot(L), 0.0f);
+				//	float NH = std::max(N.dot(H), 0.0f);
+				//	NH = pow(NH, frontMost->objectHit->material->alpha);
+				//	//color = frontMost->N;
+				//	Vector3f C = frontMost->objectHit->material->Kd.cwiseProduct(Ia) + frontMost->objectHit->material->Kd.cwiseProduct(Ii * NL) + frontMost->objectHit->material->Ks.cwiseProduct(Ii * NH);
+				//	color = C;
+				//	//color = frontMost->objectHit->material->Kd;
+				//	//color = Vector3f((frontMost->t-5.0f)/4.0f, (frontMost->t - 5.0f) / 4.0f, (frontMost->t - 5.0f) / 4.0f);
+				//	//color = frontMost->P;
+				//}
+				Vector3f test = ImagePointer[y * width + x];
+				test += color;
+				ImagePointer[y * width + x] = test;
 			}
-			ImagePointer[y * width + x] = color;
 		}
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		rayTracer.Use();
+		glGenTextures(1, &texture);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, texture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (GLint)GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (GLint)GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)GL_LINEAR);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, (GLint)GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, &ImagePointer[0]);
+		glGenerateMipmap(GL_TEXTURE_2D);
+
+		int loc;
+		loc = glGetUniformLocation(rayTracer.program, "pass");
+		glUniform1i(loc, i);
+		loc = glGetUniformLocation(rayTracer.program, "Image");
+		glUniform1i(loc, 1);
+		DrawFSQ();
+		glutSwapBuffers();
 	}
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	rayTracer.Use();
-	glGenTextures(1, &texture);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (GLint)GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (GLint)GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)GL_LINEAR);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, (GLint)GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, &ImagePointer[0]);
-	glGenerateMipmap(GL_TEXTURE_2D);
-
-	int loc;
-	loc = glGetUniformLocation(rayTracer.program, "Image");
-	glUniform1i(loc, 1);
-	DrawFSQ();
-	glutSwapBuffers();
-
 	fprintf(stderr, "Image written\n");
 	std::string inName = "testscene.scn";
 	std::string hdrName = inName;
@@ -813,6 +899,7 @@ void Realtime::cylinder(const Vector3f base, const Vector3f axis, const float ra
 
 void Realtime::triangleMesh(MeshData* meshdata)
 {
+	return;
 	Obj* obj = new Obj(meshdata, Matrix4f::Identity(), meshdata->mat);
 	for (int i = 0; i < meshdata->triangles.size(); i++)
 	{
