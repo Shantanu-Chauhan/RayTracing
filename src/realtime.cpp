@@ -628,12 +628,12 @@ float GeometryFactor(Intersection A, Intersection B)
 	Vector3f D = A.P - B.P;
 	float AnDotD = A.N.dot(D);
 	float BnDotD = B.N.dot(D);
-	float DdotDSq = pow(D.dot(D),2);
-	return std::max((AnDotD * BnDotD) / DdotDSq, 0.0f);
-	//return fabs((AnDotD * BnDotD) / DdotDSq);
+	float DdotDSq = pow(D.dot(D), 2);
+	//return std::max((AnDotD * BnDotD) / DdotDSq, 0.0f);
+	return fabs((AnDotD * BnDotD) / DdotDSq);
 }
 
-float PdfLight(Obj* O,int NumberOfLights)
+float PdfLight(Obj* O, int NumberOfLights)
 {
 	return 1 / (O->shape->Area() * NumberOfLights);
 }
@@ -642,7 +642,6 @@ Vector3f Realtime::TracePath(Ray ray)
 	Vector3f C(0.0f, 0.0f, 0.0f);	//Accumulated light
 	Vector3f W(1.0f, 1.0f, 1.0f);	//Accumulated weight
 	Intersection P;// = new Intersection();
-	Intersection Q;// = new Intersection();
 	Minimizer miniP(&ray, &P);
 	BVMinimize(Tree, miniP);
 	Vector3f N = P.N.normalized();
@@ -654,32 +653,29 @@ Vector3f Realtime::TracePath(Ray ray)
 	}
 	while (myrandom(RNGen) <= RussianRoulette)
 	{
-		Vector3f wi;
-		Vector3f f;
-		float p;
 		bool check = true;
 		//Explicit Light Correction
-		if(check)
+		if (check)
 		{
 			Intersection L = SampleLight();
-			p = PdfLight(L.objectHit, lights.size()) / GeometryFactor(P, L);
-			wi = L.P - P.P;
-			wi.normalize();
+			float p = PdfLight(L.objectHit, lights.size()) / GeometryFactor(P, L);
+			Vector3f wi = (L.P - P.P).normalized();
 			Intersection I;
 			Ray rayP;
 			rayP.D = wi;
 			rayP.Q = P.P;
 			Minimizer miniI(&rayP, &I);
 			BVMinimize(Tree, miniI);
-			if (p > 0.0f && I.objectHit != nullptr && I.P == L.P && I.objectHit == L.objectHit)
+			if (p > 0.0f && I.objectHit != nullptr && I.P == L.P)
 			{
-				f = EvalScattering(N, wi, L.objectHit->material->Kd);
-				C +=  W.cwiseProduct(EvalRadiance(L.objectHit)).cwiseProduct(f/p);
+				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd);
+				C += W.cwiseProduct(EvalRadiance(L.objectHit)).cwiseProduct(f / p);
 			}
 		}
 		//Implicit Light Correction
-		wi = SampleBRDF(N);
-		wi.normalize();
+		Vector3f wi = SampleBRDF(N);
+		//wi.normalize();
+		Intersection Q;// = new Intersection();
 		Ray NewRay;
 		NewRay.D = wi;
 		NewRay.Q = P.P;
@@ -687,14 +683,14 @@ Vector3f Realtime::TracePath(Ray ray)
 		BVMinimize(Tree, miniQ);
 		if (Q.objectHit == nullptr)
 			break;
-		f = EvalScattering(N, wi, P.objectHit->material->Kd);
-		p = PdfBRDF(N, wi) * RussianRoulette;
-		if (p < pow(10.0f,-6))
+		Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd);
+		float p = PdfBRDF(N, wi) * RussianRoulette;
+		if (p < pow(10.0f, -6))
 			break;
-		W = W.cwiseProduct(f/p);
+		W = W.cwiseProduct(f / p);
 		if (Q.objectHit->material->isLight())
 		{
-			C = C + W.cwiseProduct(EvalRadiance(Q.objectHit));
+			C += W.cwiseProduct(EvalRadiance(Q.objectHit));
 			break;
 		}
 		P = Q;
@@ -709,19 +705,19 @@ void Realtime::RayTracerDrawScene()
 	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());
 	Vector3f Z = -1 * ViewQuaternion()._transformVector(Vector3f::UnitZ());
 	int loc;
-	for (int i = 1; i < 100000; i++)
+	for (int i = 1; i < 5000; i++)
 	{
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
 		for (int y = 0; y < height; y++) {
 
-			fprintf(stderr, "Pass : %4d Rendering %4d\r",i, y);
+			fprintf(stderr, "Pass : %4d Rendering %4d\r", i, y);
 			for (int x = 0; x < width; x++) {
 				float dx, dy;
-				//dx = 2.0f * (x + 0.5f) / width - 1.0f;
-				//dy = 2.0f * (y + 0.5f) / height - 1.0f;
-				float random = myrandom(RNGen);
-				dx = 2.0f * (x + random) / width - 1.0f;
-				dy = 2.0f * (y + random) / height - 1.0f;
+				dx = 2.0f * (x + 0.5f) / width - 1.0f;
+				dy = 2.0f * (y + 0.5f) / height - 1.0f;
+				//float random = myrandom(RNGen);
+				//dx = 2.0f * (x + myrandom(RNGen)) / width - 1.0f;
+				//dy = 2.0f * (y + myrandom(RNGen)) / height - 1.0f;
 				Vector3f direction(X * dx + Y * dy + Z);
 				direction.normalize();
 				Ray ray;
@@ -782,29 +778,29 @@ void Realtime::RayTracerDrawScene()
 			glTexImage2D(GL_TEXTURE_2D, 0, (GLint)GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, &ImagePointer[0]);
 			glGenerateMipmap(GL_TEXTURE_2D);
 
-			
+
 			loc = glGetUniformLocation(rayTracer.program, "pass");
 			glUniform1i(loc, i);
 			loc = glGetUniformLocation(rayTracer.program, "Image");
 			glUniform1i(loc, 1);
 			DrawFSQ();
 			glutSwapBuffers();
-			if (i == 512||i==1024||i==2048||i==8||i==64||i==128)
+			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1)
 			{
 				fprintf(stderr, "Image written\n");
 				std::string inName;
-				if(i==512)
-					inName = "testscene512.scn";
-				else if (i == 1024)
-					inName = "testscene1024.scn";
-				else if (i == 2048)
-					inName = "testscene2048.scn";
+				if (i == 1)
+					inName = "testscene1.scn";
 				else if (i == 8)
 					inName = "testscene8.scn";
 				else if (i == 64)
 					inName = "testscene64.scn";
-				else if (i == 128)
-					inName = "testscene128.scn";
+				else if (i == 512)
+					inName = "testscene512.scn";
+				else if (i == 2048)
+					inName = "testscene2048.scn";
+				else if (i == 4096)
+					inName = "testscene4096.scn";
 				std::string hdrName = inName;
 
 				hdrName.replace(hdrName.size() - 3, hdrName.size(), "hdr");
@@ -998,7 +994,7 @@ void Realtime::cylinder(const Vector3f base, const Vector3f axis, const float ra
 
 void Realtime::triangleMesh(MeshData* meshdata)
 {
-	return;
+	//return;
 	Obj* obj = new Obj(meshdata, Matrix4f::Identity(), meshdata->mat);
 	for (int i = 0; i < meshdata->triangles.size(); i++)
 	{
