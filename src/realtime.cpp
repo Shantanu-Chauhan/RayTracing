@@ -570,12 +570,14 @@ Vector3f SampleLobe(Vector3f N, float c, float phi)
 Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd)
 {
 	float NdotWiAbs = std::max(N.dot(wi), 0.0f);
+	//float NdotWiAbs = fabs(N.dot(wi));
 	return NdotWiAbs * Kd / PI;
 }
 
 float PdfBRDF(Vector3f N, Vector3f wi)
 {
 	float NdotWiAbs = std::max(N.dot(wi), 0.0f);
+	//float NdotWiAbs = fabs(N.dot(wi));
 	return NdotWiAbs / PI;
 }
 
@@ -607,16 +609,16 @@ Intersection Realtime::SampleLight()
 	Intersection test;
 	Obj* L = *select_randomly(lights.begin(), lights.end());
 	//SampleSphere
-	Vector3f center = L->Center();
+	Vector3f center = static_cast<Sphere*>(L->shape)->center;
 	float radius = static_cast<Sphere*>(L->shape)->radius;
 	float sai1, sai2;
 	sai1 = myrandom(RNGen);
 	sai2 = myrandom(RNGen);
 	float z = 2 * sai1 - 1.0f;
-	float r = sqrt(1 - z * z);
+	float r = sqrt(1 - (z * z));
 	float a = 2 * PI * sai2;
-	test.N = Vector3f(r * cos(a), r * sin(a), z);
-	test.P = center + radius * test.N;
+	test.N = Vector3f(r * cos(a), r * sin(a), z).normalized();
+	test.P = center + (radius * test.N);
 	test.objectHit = L;
 	return test;
 }
@@ -628,52 +630,56 @@ float GeometryFactor(Intersection A, Intersection B)
 	float BnDotD = B.N.dot(D);
 	float DdotDSq = pow(D.dot(D),2);
 	return std::max((AnDotD * BnDotD) / DdotDSq, 0.0f);
+	//return fabs((AnDotD * BnDotD) / DdotDSq);
 }
 
 float PdfLight(Obj* O,int NumberOfLights)
 {
 	return 1 / (O->shape->Area() * NumberOfLights);
 }
-Vector3f Realtime::TracePath(Ray* ray)
+Vector3f Realtime::TracePath(Ray ray)
 {
 	Vector3f C(0.0f, 0.0f, 0.0f);	//Accumulated light
 	Vector3f W(1.0f, 1.0f, 1.0f);	//Accumulated weight
 	Intersection P;// = new Intersection();
 	Intersection Q;// = new Intersection();
-	Minimizer miniP(ray, &P);
-	float minDist = BVMinimize(Tree, miniP);
-	Vector3f N = P.N;
+	Minimizer miniP(&ray, &P);
+	BVMinimize(Tree, miniP);
+	Vector3f N = P.N.normalized();
 	if (P.objectHit == nullptr)
 		return C;
 	if (P.objectHit->material->isLight())
 	{
 		return EvalRadiance(P.objectHit);
 	}
-	while (myrandom(RNGen) <= 0.8f)
+	while (myrandom(RNGen) <= RussianRoulette)
 	{
 		Vector3f wi;
 		Vector3f f;
 		float p;
-		//Explicit Light Correction
 		bool check = true;
+		//Explicit Light Correction
+		if(check)
 		{
 			Intersection L = SampleLight();
 			p = PdfLight(L.objectHit, lights.size()) / GeometryFactor(P, L);
 			wi = L.P - P.P;
+			wi.normalize();
 			Intersection I;
 			Ray rayP;
 			rayP.D = wi;
 			rayP.Q = P.P;
 			Minimizer miniI(&rayP, &I);
 			BVMinimize(Tree, miniI);
-			if (p > 0 && I.objectHit != nullptr && I.P == L.P)
+			if (p > 0.0f && I.objectHit != nullptr && I.P == L.P && I.objectHit == L.objectHit)
 			{
 				f = EvalScattering(N, wi, L.objectHit->material->Kd);
-				C += W.cwiseProduct(EvalRadiance(L.objectHit));
+				C +=  W.cwiseProduct(EvalRadiance(L.objectHit)).cwiseProduct(f/p);
 			}
 		}
+		//Implicit Light Correction
 		wi = SampleBRDF(N);
-		//wi.normalize();
+		wi.normalize();
 		Ray NewRay;
 		NewRay.D = wi;
 		NewRay.Q = P.P;
@@ -683,34 +689,27 @@ Vector3f Realtime::TracePath(Ray* ray)
 			break;
 		f = EvalScattering(N, wi, P.objectHit->material->Kd);
 		p = PdfBRDF(N, wi) * RussianRoulette;
-		if (p < 0.000001f)
+		if (p < pow(10.0f,-6))
 			break;
-		W = W.cwiseProduct(f) / p;
+		W = W.cwiseProduct(f/p);
 		if (Q.objectHit->material->isLight())
 		{
-			C += W.cwiseProduct(EvalRadiance(Q.objectHit));
+			C = C + W.cwiseProduct(EvalRadiance(Q.objectHit));
 			break;
 		}
-		P.N = Q.N;
-		P.objectHit = Q.objectHit;
-		P.P = Q.P;
-		P.t = Q.t;
-		P.UV = Q.UV;
+		P = Q;
 	}
 	return C;
 }
 
 void Realtime::RayTracerDrawScene()
 {
-	//Tree.init(shapes.begin(), shapes.end());
-	//Minimizer mini(shapes.begin(), shapes.end());
 	float rx = (ry * width) / height;
 	Vector3f X = rx * ViewQuaternion()._transformVector(Vector3f::UnitX());
 	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());
 	Vector3f Z = -1 * ViewQuaternion()._transformVector(Vector3f::UnitZ());
-	//Minimizer mini(shapes.begin(),shapes.end());
 	int loc;
-	for (int i = 1; i < 128; i++)
+	for (int i = 1; i < 100000; i++)
 	{
 #pragma omp parallel for schedule(dynamic, 1) // Magic: Multi-thread y loop
 		for (int y = 0; y < height; y++) {
@@ -720,15 +719,16 @@ void Realtime::RayTracerDrawScene()
 				float dx, dy;
 				//dx = 2.0f * (x + 0.5f) / width - 1.0f;
 				//dy = 2.0f * (y + 0.5f) / height - 1.0f;
-				dx = 2.0f * (x + myrandom(RNGen)) / width - 1.0f;
-				dy = 2.0f * (y + myrandom(RNGen)) / height - 1.0f;
-				Vector3f direction(X * dx + dy * Y + Z);
+				float random = myrandom(RNGen);
+				dx = 2.0f * (x + random) / width - 1.0f;
+				dy = 2.0f * (y + random) / height - 1.0f;
+				Vector3f direction(X * dx + Y * dy + Z);
 				direction.normalize();
 				Ray ray;
 				ray.Q = eye;
 				ray.D = direction;
 				//Intersection* frontMost = new Intersection();
-				//Minimizer mini(ray, frontMost);
+				//Minimizer mini(&ray, frontMost);
 				//float minDist = BVMinimize(Tree, mini);
 				/*for (int i = 0; i < shapes.size(); i++)
 				{
@@ -736,7 +736,7 @@ void Realtime::RayTracerDrawScene()
 					shapes[i]->Intersect(ray, *frontMost);
 				}*/
 				Vector3f color;
-				color = TracePath(&ray);
+				color = TracePath(ray);
 
 				//if (frontMost->objectHit == nullptr)
 				//	color = Color(0.0, 0.0, 0.0);
@@ -767,7 +767,6 @@ void Realtime::RayTracerDrawScene()
 				ImagePointer[y * width + x] = test;
 			}
 		}
-		//if(i==2|| i == 8 || i == 64 || i == 512 || i == 256 || i == 128 ){
 		{
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -790,6 +789,27 @@ void Realtime::RayTracerDrawScene()
 			glUniform1i(loc, 1);
 			DrawFSQ();
 			glutSwapBuffers();
+			if (i == 512||i==1024||i==2048||i==8||i==64||i==128)
+			{
+				fprintf(stderr, "Image written\n");
+				std::string inName;
+				if(i==512)
+					inName = "testscene512.scn";
+				else if (i == 1024)
+					inName = "testscene1024.scn";
+				else if (i == 2048)
+					inName = "testscene2048.scn";
+				else if (i == 8)
+					inName = "testscene8.scn";
+				else if (i == 64)
+					inName = "testscene64.scn";
+				else if (i == 128)
+					inName = "testscene128.scn";
+				std::string hdrName = inName;
+
+				hdrName.replace(hdrName.size() - 3, hdrName.size(), "hdr");
+				WriteHdrImage(hdrName, width, height, ImagePointer);
+			}
 		}
 	}
 	fprintf(stderr, "Image written\n");
@@ -922,6 +942,7 @@ void Realtime::MouseMotion(int x, int y)
 
 void Realtime::sphere(const Vector3f center, const float r, Material* mat)
 {
+	//return;
 	Matrix4f m = translate(center) * scale(Vector3f(r, r, r));
 	Vector3f rrr(r, r, r);
 	Obj* obj = new Obj(sphMesh, m, mat);
@@ -935,6 +956,7 @@ void Realtime::sphere(const Vector3f center, const float r, Material* mat)
 
 void Realtime::box(const Vector3f base, const Vector3f diag, Material* mat)
 {
+	//return;
 	Matrix4f m = translate(base) * scale(Vector3f(diag[0], diag[1], diag[2]));
 	Obj* obj = new Obj(boxMesh, m, mat);
 	obj->shape = new Box(base, diag);
@@ -948,6 +970,7 @@ void Realtime::box(const Vector3f base, const Vector3f diag, Material* mat)
 
 void Realtime::cylinder(const Vector3f base, const Vector3f axis, const float radius, Material* mat)
 {
+	//return;
 	Vector3f Z(0.0f, 0.0f, 1.0f);
 	Vector3f C = axis.normalized();
 	Vector3f B = C.cross(Z);
@@ -975,6 +998,7 @@ void Realtime::cylinder(const Vector3f base, const Vector3f axis, const float ra
 
 void Realtime::triangleMesh(MeshData* meshdata)
 {
+	return;
 	Obj* obj = new Obj(meshdata, Matrix4f::Identity(), meshdata->mat);
 	for (int i = 0; i < meshdata->triangles.size(); i++)
 	{

@@ -1,6 +1,6 @@
 #include"RaytracerHelper.h"
 #include "raytrace.h"
-const float epsilon = 0.00001f;
+const float epsilon = pow(10.0f,-4);
 
 Ray::Ray(Vector3f q, Vector3f d)
 {
@@ -49,7 +49,8 @@ bool Sphere::Intersect(Ray* ray, Intersection& intersection)
 		intersection.t = resultT;
 		intersection.P = ray->eval(resultT);
 		Vector3f normal(intersection.P - center);
-		intersection.N = normal.normalized();
+		normal.normalize();
+		intersection.N = normal;
 		float theta = atan2(normal.dot(Vector3f(0, 1, 0)), normal.dot(Vector3f(1, 0, 0)));
 		float phi = acos(normal.dot(Vector3f(0, 0, 1)));
 		intersection.UV = Vector2f(theta / 2.0f * 3.14f, phi / 3.14f);
@@ -61,15 +62,15 @@ bool Sphere::Intersect(Ray* ray, Intersection& intersection)
 
 Box::Box(Vector3f corner, Vector3f diagonal)
 {
-	slabb[0].Normal = Vector3f(1, 0, 0);
+	slabb[0].Normal = Vector3f(1.0f, 0.0f, 0.0f);
 	slabb[0].d0 = -corner.x();
 	slabb[0].d1 = -corner.x() - diagonal.x();
 
-	slabb[1].Normal = Vector3f(0, 1, 0);
+	slabb[1].Normal = Vector3f(0.0f, 1.0f, 0.0f);
 	slabb[1].d0 = -corner.y();
 	slabb[1].d1 = -corner.y() - diagonal.y();
 
-	slabb[2].Normal = Vector3f(0, 0, 1);
+	slabb[2].Normal = Vector3f(0.0f, 0.0f, 1.0f);
 	slabb[2].d0 = -corner.z();
 	slabb[2].d1 = -corner.z() - diagonal.z();
 
@@ -82,25 +83,22 @@ bool Box::Intersect(Ray* ray, Intersection& intersection)
 	Interval solution;
 	for (int i = 0; i < 3; i++)
 	{
-		if (test.Intersect(ray, slabb[i]))
+		test.Intersect(ray, slabb[i]);
+		if (test.T0 > solution.T0)
 		{
-			if (test.T0 > solution.T0)
-			{
-				solution.N0 = test.N0;
-				solution.T0 = test.T0;
-			}
-			if (test.T1 < solution.T1)
-			{
-				solution.T1 = test.T1;
-				solution.N1 = test.N1;
-			}
+			solution.N0 = test.N0;
+			solution.T0 = test.T0;
+		}
+		if (test.T1 < solution.T1)
+		{
+			solution.T1 = test.T1;
+			solution.N1 = test.N1;
 		}
 	}
 	if (solution.T0 > solution.T1)//no intersection
 		return false;
 	else
 	{
-		//if (solution.T0 <= solution.T1 && !signbit(solution.T0))
 		if (solution.T0 <= solution.T1 && solution.T0 > epsilon)
 		{
 			if (solution.T0 < intersection.t)
@@ -126,6 +124,7 @@ bool Box::Intersect(Ray* ray, Intersection& intersection)
 		else
 			return false;
 	}
+	return false;
 }
 
 bool Box::IntersectBoundingBox(Ray* ray, Intersection& intersection, Interval& interval)
@@ -133,18 +132,16 @@ bool Box::IntersectBoundingBox(Ray* ray, Intersection& intersection, Interval& i
 	Interval test;
 	for (int i = 0; i < 3; i++)
 	{
-		if (test.Intersect(ray, slabb[i]))
+		test.Intersect(ray, slabb[i]);
+		if (test.T0 > interval.T0)
 		{
-			if (test.T0 > interval.T0)
-			{
-				interval.N0 = test.N0;
-				interval.T0 = test.T0;
-			}
-			if (test.T1 < interval.T1)
-			{
-				interval.T1 = test.T1;
-				interval.N1 = test.N1;
-			}
+			interval.N0 = test.N0;
+			interval.T0 = test.T0;
+		}
+		if (test.T1 < interval.T1)
+		{
+			interval.T1 = test.T1;
+			interval.N1 = test.N1;
 		}
 	}
 	if (interval.T0 > interval.T1)//no intersection
@@ -176,6 +173,7 @@ bool Box::IntersectBoundingBox(Ray* ray, Intersection& intersection, Interval& i
 		else
 			return false;
 	}
+	return false;
 }
 
 Cylinder::Cylinder(Vector3f _base, Vector3f _axis, float _radius)
@@ -186,7 +184,7 @@ Cylinder::Cylinder(Vector3f _base, Vector3f _axis, float _radius)
 	Vector3f BASE = Vector3f(base + Vector3f(radius, radius, radius));
 	Vector3f BASE2 = Vector3f(base - Vector3f(radius, radius, radius));
 	Vector3f BASE3 = Vector3f(axis + base - Vector3f(radius, radius, radius));
-	Vector3f BASE4 = Vector3f(axis + base - Vector3f(radius, radius, radius));
+	Vector3f BASE4 = Vector3f(axis + base + Vector3f(radius, radius, radius));
 	float minx, maxx, miny, maxy, minz, maxz;
 	minx = std::min(std::min(BASE.x(), BASE2.x()), std::min(BASE3.x(), BASE4.x()));
 	miny = std::min(std::min(BASE.y(), BASE2.y()), std::min(BASE3.y(), BASE4.y()));
@@ -205,8 +203,7 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 	Ray test;// = new Ray();
 	Quaternionf q = Quaternionf::FromTwoVectors(axis, Vector3f::UnitZ());
 	test.Q = q._transformVector(ray->Q - base);
-	test.D = q._transformVector(ray->D);
-
+	test.D = q._transformVector(ray->D).normalized();
 
 	Interval a0;
 	Interval b0;
@@ -226,7 +223,7 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 	float c = test.Q.x() * test.Q.x() + test.Q.y() * test.Q.y() - (radius * radius);
 
 	float BSQMinus4AC = bSq - (4 * a * c);
-	if (BSQMinus4AC < 0)
+	if (BSQMinus4AC < 0.0f)
 		return false;
 	float t0, t1;
 
@@ -234,47 +231,47 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 	t0 = (-b - std::sqrtf(BSQMinus4AC)) / (2 * a);
 	t1 = (-b + std::sqrtf(BSQMinus4AC)) / (2 * a);
 	//Calculate normal as well?
-	if (t0 > t1)
+	/*if (t0 > t1)
 	{
 		float temp = t1;
 		t1 = t0;
 		t0 = temp;
-	}
+	}*/
 	c0.T0 = t0;
 	c0.T1 = t1;
 
-	Vector3f M0 = test.eval(t0);
-	Vector3f M1 = test.eval(t1);
-	c0.N0 = Vector3f(M0.x(), M0.y(), 0.0f);
-	c0.N1 = Vector3f(M1.x(), M1.y(), 0.0f);
+	Vector3f M0 = test.eval(c0.T0);
+	Vector3f M1 = test.eval(c0.T1);
+	c0.N0 = Vector3f(M0.x(), M0.y(), 0.0f).normalized();
+	c0.N1 = Vector3f(M1.x(), M1.y(), 0.0f).normalized();
 
-	if (a0.T0 >= b0.T0 && a0.T0 >= c0.T0)
+	if (a0.T0 > b0.T0 && a0.T0 > c0.T0)
 	{
 		solution.T0 = a0.T0;
 		solution.N0 = a0.N0;
 	}
-	if (b0.T0 >= a0.T0 && b0.T0 >= c0.T0)
+	if (b0.T0 > a0.T0 && b0.T0 > c0.T0)
 	{
 		solution.T0 = b0.T0;
 		solution.N0 = q.conjugate()._transformVector(b0.N0);
 	}
-	if (c0.T0 >= a0.T0 && c0.T0 >= b0.T0)
+	if (c0.T0 > a0.T0 && c0.T0 > b0.T0)
 	{
 		solution.T0 = c0.T0;
 		solution.N0 = q.conjugate()._transformVector(c0.N0);
 	}
 	//-------------------T1
-	if (a0.T1 <= b0.T1 && a0.T0 <= c0.T1)
+	if (a0.T1 < b0.T1 && a0.T0 < c0.T1)
 	{
 		solution.T1 = a0.T1;
 		solution.N1 = a0.N1;
 	}
-	if (b0.T1 <= a0.T1 && b0.T1 <= c0.T1)
+	if (b0.T1 < a0.T1 && b0.T1 < c0.T1)
 	{
 		solution.T1 = b0.T1;
 		solution.N1 = q.conjugate()._transformVector(b0.N1);
 	}
-	if (c0.T1 <= a0.T1 && c0.T1 <= b0.T1)
+	if (c0.T1 < a0.T1 && c0.T1 < b0.T1)
 	{
 		solution.T1 = c0.T1;
 		solution.N1 = q.conjugate()._transformVector(c0.N1);
@@ -284,7 +281,7 @@ bool Cylinder::Intersect(Ray* ray, Intersection& intersection)
 		return false;
 	else
 	{
-		if (solution.T0 <= solution.T1 && solution.T0> epsilon)
+		if (solution.T0 <= solution.T1 && solution.T0 > epsilon)
 		{
 			if (solution.T0 < intersection.t)
 			{
@@ -381,8 +378,8 @@ bool Triangle::Intersect(Ray* ray, Intersection& intersection)
 
 void Interval::Empty()
 {
-	T0 = 0.0f;
-	T1 = -1.0f;
+	T0 = 1.0f;
+	T1 = 0.0f;
 }
 
 bool Interval::Intersect(Ray* ray, Slab slab)
@@ -415,7 +412,8 @@ bool Interval::Intersect(Ray* ray, Slab slab)
 		float s0, s1;
 		s0 = SlabNormalDotRayQ + slab.d0;
 		s1 = SlabNormalDotRayQ + slab.d1;
-		if (s0 < 0.0f && s1 >= 0.0f || s1 < 0.0f && s0 >= 0.0f)
+		//if (s0 < 0.0f && s1 >= 0.0f || s1 < 0.0f && s0 >= 0.0f)
+		if (signbit(s0) != signbit(s1))
 		{
 			T0 = 0.0f;
 			T1 = std::numeric_limits<float>::max();
@@ -428,6 +426,7 @@ bool Interval::Intersect(Ray* ray, Slab slab)
 		}
 	}
 	//ray intersects both the slabs
+	return false;
 }
 
 Interval::Interval(float t0, float t1, Vector3f n0, Vector3f n1)

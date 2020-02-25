@@ -6,3 +6,8 @@
 /src/Debug/raytrace.tlog
 /src/Debug
 /src/Release
+/src/testscene8.hdr
+/src/testscene64.hdr
+/src/testscene512.hdr
+/src/testscene128.hdr
+/src/testscene1024.hdr

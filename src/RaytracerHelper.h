@@ -60,7 +60,7 @@ public:
 	float radius;
 	float Area()
 	{
-		return 4 *3.141 * radius * radius;
+		return 4.0f *3.14159011f * radius * radius;
 	}
 };
 
@@ -135,7 +135,7 @@ public:
 	// the minimum t and it's corresponding intersection info.
 	// Return INF to indicate no intersection.
 	float minimumOnObject(Shape* obj) {
-		obj->Intersect(ray1,*intersection); // or whatever
+		obj->Intersect(ray1,*intersection);
 		return intersection->t;
 	}
 	// Called by BVMinimize to intersect the ray with a Bbox and
@@ -147,7 +147,7 @@ public:
 	{
 		Intersection bboxIntersection;
 		Interval check;
-		Vector3f L = box.corner(AlignedBox<float, 3>::BottomLeftFloor); // Box corner
+		Vector3f L = box.min(); // Box corner
 		Vector3f U = box.diagonal(); // Box corner
 		Box test(L, U);// = new Box(L, U);
 		test.IntersectBoundingBox(ray1, bboxIntersection, check);
