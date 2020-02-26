@@ -666,16 +666,17 @@ Vector3f Realtime::TracePath(Ray ray)
 			rayP.Q = P.P;
 			Minimizer miniI(&rayP, &I);
 			BVMinimize(Tree, miniI);
-			if (p > 0.0f && I.objectHit != nullptr && I.P == L.P)
+			if (!signbit(p) && I.objectHit != nullptr && (I.P - L.P).norm() < pow(10.0f, -4))
 			{
+
 				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd);
 				C += W.cwiseProduct(EvalRadiance(L.objectHit)).cwiseProduct(f / p);
 			}
 		}
 		//Implicit Light Correction
-		Vector3f wi = SampleBRDF(N);
+		Vector3f wi = SampleBRDF(N).normalized();
 		//wi.normalize();
-		Intersection Q;// = new Intersection();
+		Intersection Q;
 		Ray NewRay;
 		NewRay.D = wi;
 		NewRay.Q = P.P;
@@ -713,11 +714,11 @@ void Realtime::RayTracerDrawScene()
 			fprintf(stderr, "Pass : %4d Rendering %4d\r", i, y);
 			for (int x = 0; x < width; x++) {
 				float dx, dy;
-				dx = 2.0f * (x + 0.5f) / width - 1.0f;
-				dy = 2.0f * (y + 0.5f) / height - 1.0f;
+				//dx = 2.0f * (x + 0.5f) / width - 1.0f;
+				//dy = 2.0f * (y + 0.5f) / height - 1.0f;
 				//float random = myrandom(RNGen);
-				//dx = 2.0f * (x + myrandom(RNGen)) / width - 1.0f;
-				//dy = 2.0f * (y + myrandom(RNGen)) / height - 1.0f;
+				dx = 2.0f * (x + myrandom(RNGen)) / width - 1.0f;
+				dy = 2.0f * (y + myrandom(RNGen)) / height - 1.0f;
 				Vector3f direction(X * dx + Y * dy + Z);
 				direction.normalize();
 				Ray ray;
@@ -785,7 +786,7 @@ void Realtime::RayTracerDrawScene()
 			glUniform1i(loc, 1);
 			DrawFSQ();
 			glutSwapBuffers();
-			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1)
+			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1||i==1024||i==256)
 			{
 				fprintf(stderr, "Image written\n");
 				std::string inName;
@@ -795,7 +796,11 @@ void Realtime::RayTracerDrawScene()
 					inName = "testscene8.scn";
 				else if (i == 64)
 					inName = "testscene64.scn";
+				else if (i == 256)
+					inName = "testscene256.scn";
 				else if (i == 512)
+					inName = "testscene512.scn";
+				else if (i == 1024)
 					inName = "testscene512.scn";
 				else if (i == 2048)
 					inName = "testscene2048.scn";
