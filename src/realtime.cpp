@@ -666,7 +666,7 @@ Vector3f Realtime::TracePath(Ray ray)
 			rayP.Q = P.P;
 			Minimizer miniI(&rayP, &I);
 			BVMinimize(Tree, miniI);
-			if (!signbit(p) && I.objectHit != nullptr && (I.P - L.P).norm() < pow(10.0f, -4))
+			if (!signbit(p) && I.objectHit != nullptr && I.objectHit == L.objectHit)
 			{
 
 				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd);
@@ -701,6 +701,10 @@ Vector3f Realtime::TracePath(Ray ray)
 
 void Realtime::RayTracerDrawScene()
 {
+	/*Color* image = new Color[width * height];
+	for (int y = 0; y < height; y++)
+		for (int x = 0; x < width; x++)
+			image[y * width + x] = Color(0, 0, 0);*/
 	float rx = (ry * width) / height;
 	Vector3f X = rx * ViewQuaternion()._transformVector(Vector3f::UnitX());
 	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());
@@ -765,6 +769,9 @@ void Realtime::RayTracerDrawScene()
 			}
 		}
 		{
+			/*for (int y1 = 0; y1 < height; y1++)
+				for (int x1 = 0; x1 < width; x1++)
+					image[y1 * width + x1] = ImagePointer[y1 * width + x1]/i;*/
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			rayTracer.Use();
@@ -786,7 +793,7 @@ void Realtime::RayTracerDrawScene()
 			glUniform1i(loc, 1);
 			DrawFSQ();
 			glutSwapBuffers();
-			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1||i==1024||i==256)
+			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1||i==1024||i==256 || i==4096)
 			{
 				fprintf(stderr, "Image written\n");
 				std::string inName;
@@ -801,7 +808,7 @@ void Realtime::RayTracerDrawScene()
 				else if (i == 512)
 					inName = "testscene512.scn";
 				else if (i == 1024)
-					inName = "testscene512.scn";
+					inName = "testscene1024.scn";
 				else if (i == 2048)
 					inName = "testscene2048.scn";
 				else if (i == 4096)
