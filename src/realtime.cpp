@@ -570,12 +570,39 @@ Vector3f SampleLobe(Vector3f N, float c, float phi)
 
 //CalcG for phong
 
-//float CalcG(Vector3f v, Vector3f m,float alpha,Vector3f N)
+float CalcG(Vector3f v, Vector3f m,float alpha,Vector3f N)
+{
+	float Xi;
+	float term = v.dot(m) / v.dot(N);
+	float TanThetaV = sqrt(1.0f - pow(v.dot(N), 2)) / v.dot(N);
+	if (TanThetaV == 0.0f)
+		return 1.0f;
+	float a = sqrt((alpha / 2) + 1.0f) / TanThetaV;
+	if (v.dot(N) > 1.0f)
+		return 1.0f;
+	if (term > 0.0f)
+		Xi = 1.0f;
+	else
+		Xi = 0.0f;
+	if (a < 1.6f)
+	{
+		float num = (3.535f * a) + (2.181f * a * a);
+		float denom = 1.0f + (2.276f * a) + (2.577f * a * a);
+		return (Xi * num) / denom;
+	}
+	else
+	{
+		return Xi*1.0f;
+	}
+}
+
+//CalcG for GGX
+
+//float CalcG(Vector3f v, Vector3f m, float alpha, Vector3f N)
 //{
 //	float Xi;
 //	float term = v.dot(m) / v.dot(N);
 //	float TanThetaV = sqrt(1.0f - pow(v.dot(N), 2)) / v.dot(N);
-//	float a = sqrt((alpha / 2) + 1.0f) / TanThetaV;
 //	if (v.dot(N) > 1.0f)
 //		return 1.0f;
 //	if (term > 0.0f)
@@ -584,41 +611,15 @@ Vector3f SampleLobe(Vector3f N, float c, float phi)
 //		Xi = 0.0f;
 //	if (TanThetaV == 0.0f || isnan(TanThetaV))
 //		return 1.0f;
-//	if (a < 1.6f)
-//	{
-//		float num = (3.535f * a) + (2.181f * a * a);
-//		float denom = 1.0f + (2.276f * a) + (2.577f * a * a);
-//		return (Xi * num) / denom;
-//	}
-//	else
-//	{
-//		return 1.0f;
-//	}
+//	float num = Xi * 2.0f;
+//	float denom = 1 + (sqrt(1.0f + (alpha * alpha * TanThetaV * TanThetaV)));
+//	return num / denom;
 //}
-
-
-float CalcG(Vector3f v, Vector3f m, float alpha, Vector3f N)
-{
-	float Xi;
-	float term = v.dot(m) / v.dot(N);
-	float TanThetaV = sqrt(1.0f - pow(v.dot(N), 2)) / v.dot(N);
-	if (v.dot(N) > 1.0f)
-		return 1.0f;
-	if (term > 0.0f)
-		Xi = 1.0f;
-	else
-		Xi = 0.0f;
-	if (TanThetaV == 0.0f)
-		return 1.0f;
-	float num = Xi * 2.0f;
-	float denom = 1 + (sqrt(1.0f + (alpha * alpha * TanThetaV * TanThetaV)));
-	return num / denom;
-}
 
 float CalcG(Vector3f wi, Vector3f w0, Vector3f m,float _alpha,Vector3f N)
 {
-	float alpha = sqrt(2.0f / (_alpha + 2.0f));
-	return CalcG(wi, m, alpha,N) * CalcG(w0, m, alpha,N);
+	//float alpha = sqrt(2.0f / (_alpha + 2.0f));
+	return CalcG(wi, m, _alpha,N) * CalcG(w0, m, _alpha,N);
 }
 Vector3f CalcF(float LDotH,Vector3f Ks)
 {
@@ -627,42 +628,44 @@ Vector3f CalcF(float LDotH,Vector3f Ks)
 
 //CalcD for Phong underneath
 
-//float CalcD(Vector3f m, Vector3f N, float alpha) {
-//	float TanThetaM = sqrt(1.0f - pow(m.dot(N), 2)) / m.dot(N);
-//	float d = m.dot(N);
-//	float XI;
-//	if (d > 0.0f)
-//		XI = 1.0f;
-//	else
-//		XI = 0.0f;
-//	float alphasq = alpha * alpha;
-//	float numerator = XI * (alpha + 2.0f) * pow(d, alpha);
-//	float denom = 2 * PI;
-//	float D = numerator/denom;
-//	return D;
-//}
-
-float CalcD(Vector3f m, Vector3f N, float _alpha) {
-	float alpha = sqrt(2.0f / (_alpha + 2.0f));
-	float TanThetaM = sqrt(1.0f - pow(m.dot(N), 2)) / m.dot(N);
+float CalcD(Vector3f m, Vector3f N, float alpha) {
 	float d = m.dot(N);
 	float XI;
 	if (d > 0.0f)
 		XI = 1.0f;
 	else
 		XI = 0.0f;
-	float alphasq = alpha * alpha;
-	float numerator = XI * alphasq;
-	float denom = PI * (pow(N.dot(m),4)) * pow(alphasq + pow(TanThetaM,2),2);
-	float D = numerator / denom;
+	float numerator = XI * (alpha + 2.0f) * pow(d, alpha);
+	float denom = 2 * PI;
+	float D = numerator/denom;
 	return D;
 }
 
+//CalcD for GGX underneath
+
+//float CalcD(Vector3f m, Vector3f N, float _alpha) {
+//	float alpha = sqrt(2.0f / (_alpha + 2.0f));
+//	float d = m.dot(N);
+//	float TanThetaM = sqrt(1.0f - pow(m.dot(N), 2)) / d;
+//	float XI;
+//	if (d > 0.0f)
+//		XI = 1.0f;
+//	else
+//		XI = 0.0f;
+//	float alphasq = alpha * alpha;
+//	float numerator = XI * alphasq;
+//	float denom = PI * (pow(N.dot(m),4)) * pow(alphasq + pow(TanThetaM,2),2);
+//	float D = numerator / denom;
+//	if (isnan(D))
+//		return 1.0f;
+//	return D;
+//}
+
 Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd,Vector3f w0,Material material)
 {
-	Vector3f Ed = Kd / PI;
+	Vector3f Ed = material.Kd / PI;
 	Vector3f m = (w0 + wi).normalized();
-	Vector3f Er = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N)*CalcF(fabs(wi.dot(m)), material.Ks);
+	Vector3f Er = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N)*CalcF((wi.dot(m)), material.Ks);
 	Er = Er / (4 * fabs(wi.dot(N))* fabs(w0.dot(N)));
 	return fabs(N.dot(wi)) * (Ed + Er);
 }
@@ -682,32 +685,12 @@ float PdfBRDF(Vector3f N, Vector3f wi,Material material,Vector3f w0)
 
 //Phong SampleBrdf underneath
 
-//Vector3f SampleBRDF(Vector3f w0,Vector3f N,Material material)
-//{
-//	float sai1, sai2,sai;
-//	sai = myrandom(RNGen);
-//	float s = material.Kd.norm() + material.Ks.norm();
-//	float pd = material.Kd.norm()/s;
-//	sai1 = myrandom(RNGen);
-//	sai2 = myrandom(RNGen);
-//	if (sai < pd)
-//	{
-//		return SampleLobe(N, sqrt(sai1), 2 * PI * sai2);
-//	}
-//	else
-//	{
-//		float phong = pow(sai1, 1 / (material.alpha + 1.0f));
-//		Vector3f m = SampleLobe(N, phong, 2 * PI * sai2).normalized();
-//		return (2 * (w0.dot(m)) * m) - w0;
-//	}
-//}
-
-Vector3f SampleBRDF(Vector3f w0, Vector3f N, Material material)
+Vector3f SampleBRDF(Vector3f w0,Vector3f N,Material material)
 {
-	float sai1, sai2, sai;
+	float sai1, sai2,sai;
 	sai = myrandom(RNGen);
 	float s = material.Kd.norm() + material.Ks.norm();
-	float pd = material.Kd.norm() / s;
+	float pd = material.Kd.norm()/s;
 	sai1 = myrandom(RNGen);
 	sai2 = myrandom(RNGen);
 	if (sai < pd)
@@ -716,13 +699,33 @@ Vector3f SampleBRDF(Vector3f w0, Vector3f N, Material material)
 	}
 	else
 	{
-		float alpha = sqrt(2.0f / (material.alpha + 2.0f));
-		float value = (alpha * sqrt(sai1)) / (sqrt(1 - sai1));
-		float GGX = cos(atan(value));
-		Vector3f m = SampleLobe(N, GGX, 2 * PI * sai2).normalized();
+		float phong = pow(sai1, 1 / (material.alpha + 1.0f));
+		Vector3f m = SampleLobe(N, phong, 2 * PI * sai2);
 		return (2 * (w0.dot(m)) * m) - w0;
 	}
 }
+
+//Vector3f SampleBRDF(Vector3f w0, Vector3f N, Material material)
+//{
+//	float sai1, sai2, sai;
+//	sai = myrandom(RNGen);
+//	float s = material.Kd.norm() + material.Ks.norm();
+//	float pd = material.Kd.norm() / s;
+//	sai1 = myrandom(RNGen);
+//	sai2 = myrandom(RNGen);
+//	if (sai < pd)
+//	{
+//		return SampleLobe(N, sqrt(sai1), 2 * PI * sai2);
+//	}
+//	else
+//	{
+//		float alpha = sqrt(2.0f / (material.alpha + 2.0f));
+//		float value = (alpha * sqrt(sai1)) / (sqrt(1 - sai1));
+//		float GGX = cos(atan(value));
+//		Vector3f m = SampleLobe(N, GGX, 2 * PI * sai2).normalized();
+//		return (2 * fabs(w0.dot(m)) * m) - w0;
+//	}
+//}
 
 template<typename Iter, typename RandomGenerator>
 Iter select_randomly(Iter start, Iter end, RandomGenerator& g) {
@@ -763,7 +766,6 @@ float GeometryFactor(Intersection A, Intersection B)
 	float AnDotD = A.N.dot(D);
 	float BnDotD = B.N.dot(D);
 	float DdotDSq = pow(D.dot(D), 2);
-	//return std::max((AnDotD * BnDotD) / DdotDSq, 0.0f);
 	return fabs((AnDotD * BnDotD) / DdotDSq);
 }
 
@@ -778,7 +780,7 @@ Vector3f Realtime::TracePath(Ray ray)
 	Intersection P;// = new Intersection();
 	Minimizer miniP(&ray, &P);
 	BVMinimize(Tree, miniP);
-	Vector3f N = P.N.normalized();
+	
 	if (P.objectHit == nullptr)
 		return C;
 	if (P.objectHit->material->isLight())
@@ -788,6 +790,7 @@ Vector3f Realtime::TracePath(Ray ray)
 	Vector3f w0 = -ray.D;
 	while (myrandom(RNGen) <= RussianRoulette)
 	{
+		Vector3f N = P.N.normalized();
 		bool check = true;
 		//Explicit Light Correction
 		if (check)
@@ -795,6 +798,8 @@ Vector3f Realtime::TracePath(Ray ray)
 			Intersection L = SampleLight();
 			float p = PdfLight(L.objectHit, lights.size()) / GeometryFactor(P, L);
 			Vector3f wi = (L.P - P.P).normalized();
+			float qS = PdfBRDF(N, wi, *P.objectHit->material, w0) * RussianRoulette;
+			float wS = p * p / (qS * qS + p * p);
 			Intersection I;
 			Ray rayP;
 			rayP.D = wi;
@@ -803,9 +808,8 @@ Vector3f Realtime::TracePath(Ray ray)
 			BVMinimize(Tree, miniI);
 			if (!signbit(p) && I.objectHit != nullptr && I.objectHit == L.objectHit)
 			{
-
 				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material);
-				C += W.cwiseProduct(EvalRadiance(L.objectHit)).cwiseProduct(f / p);
+				C += W.cwiseProduct(wS*EvalRadiance(L.objectHit)).cwiseProduct(f / p);
 			}
 		}
 		//Implicit Light Correction
@@ -826,7 +830,9 @@ Vector3f Realtime::TracePath(Ray ray)
 		W = W.cwiseProduct(f / p);
 		if (Q.objectHit->material->isLight())
 		{
-			C += W.cwiseProduct(EvalRadiance(Q.objectHit));
+			float qS = PdfLight(Q.objectHit, lights.size()) / GeometryFactor(P, Q);
+			float wS = p * p / (qS * qS + p * p);
+			C += W.cwiseProduct(wS*EvalRadiance(Q.objectHit));
 			break;
 		}
 		P = Q;
@@ -874,7 +880,10 @@ void Realtime::RayTracerDrawScene()
 				}*/
 				Vector3f color;
 				color = TracePath(ray);
-
+				if (isnan(color.x())||isnan(color.y()) || isnan(color.z()) || isinf(color.x()) || isinf(color.y()) || isinf(color.z()))
+				{
+					continue;
+				}
 				//if (frontMost->objectHit == nullptr)
 				//	color = Color(0.0, 0.0, 0.0);
 				//else
