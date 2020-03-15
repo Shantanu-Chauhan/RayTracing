@@ -661,26 +661,97 @@ float CalcD(Vector3f m, Vector3f N, float alpha) {
 //	return D;
 //}
 
-Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd,Vector3f w0,Material material)
+
+Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd,Vector3f w0,Material material,float t)
 {
 	Vector3f Ed = material.Kd / PI;
 	Vector3f m = (w0 + wi).normalized();
 	Vector3f Er = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N)*CalcF((wi.dot(m)), material.Ks);
 	Er = Er / (4 * fabs(wi.dot(N))* fabs(w0.dot(N)));
-	return fabs(N.dot(wi)) * (Ed + Er);
+	Vector3f Et;
+	float Eta, EtaI, EtaO;
+	if (w0.dot(N) > 0.0f)
+	{
+		EtaI = 1.0f;
+		EtaO = material.IOR;
+	}
+	else
+	{
+		EtaO = 1.0f;
+		EtaI = material.IOR;
+	}
+	Eta = EtaI / EtaO;
+	m = -(EtaO * wi + EtaI * w0).normalized();
+	float r = 1.0f - (Eta * Eta * (1.0f - pow(w0.dot(m), 2)));
+
+	Vector3f At;
+	if (w0.dot(N) < 0.0f)
+	{
+		float X, Y, Z;
+		X = exp(-t * log(material.Kt.x()));
+		Y = exp(-t * log(material.Kt.y()));
+		Z = exp(-t * log(material.Kt.z()));
+		At = Vector3f(0.0f, 1.0f, 0.0f);
+	}
+	else
+	{
+		At = Vector3f(1.0f,1.0f,1.0f);
+	}
+	if (r<0.0f)
+	{
+		Et = Er.cwiseProduct(At);
+	}
+	else
+	{
+		Vector3f num;
+		float denom;
+		num = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N) * 
+			( Vector3f(1.0f,1.0f,1.0f) - CalcF((wi.dot(m)), material.Ks)) * fabs(wi.dot(m)) * fabs(w0.dot(m)) * EtaO*EtaO ;
+		denom = fabs(wi.dot(N)) * fabs(w0.dot(N)) * pow(EtaO * wi.dot(m) + EtaI * w0.dot(m), 2);
+		Et = num / denom;
+		Et = Et.cwiseProduct(At);
+	}
+	return fabs(N.dot(wi)) * (Ed + Er+ Et);
 }
 
 float PdfBRDF(Vector3f N, Vector3f wi,Material material,Vector3f w0)
 {
-	float s = material.Kd.norm() + material.Ks.norm();
+	float s = material.Kd.norm() + material.Ks.norm()+material.Kt.norm();
 	float pd = material.Kd.norm() / s;
 	float pr = material.Ks.norm() / s;
+	float pt = material.Kt.norm() / s;
 	Vector3f m = (w0 + wi).normalized();
 	float numerator = CalcD(m, N, material.alpha) * fabs(m.dot(N));
 	float denom = 4 * fabs(wi.dot(m));
 	float Pr = numerator/denom;
 	float Pd = fabs(wi.dot(N))/PI;
-	return pd*Pd+pr*Pr;
+	float Pt;
+	float Eta, EtaI, EtaO;
+	if (w0.dot(N) > 0.0f)
+	{
+		EtaI = 1.0f;
+		EtaO = material.IOR;
+	}
+	else
+	{
+		EtaO = 1.0f;
+		EtaI = material.IOR;
+	}
+	Eta = EtaI / EtaO;
+	m = -(EtaO * wi + EtaI * w0).normalized();
+	float r = 1.0f - (Eta * Eta * (1.0f - pow(w0.dot(m), 2)));
+	if (r<0.0f)
+	{
+		Pt = Pr;
+	}
+	else
+	{
+		float num, denom;
+		num = CalcD(m, N, material.alpha) * fabs(m.dot(N)) * EtaO * EtaO * fabs(wi.dot(m));
+		denom = pow(EtaO * wi.dot(m) + EtaI * w0.dot(m), 2);//Mayeb herer
+		Pt = num / denom;
+	}
+	return pd*Pd+pr*Pr + pt*Pt;
 }
 
 //Phong SampleBrdf underneath
@@ -689,19 +760,45 @@ Vector3f SampleBRDF(Vector3f w0,Vector3f N,Material material)
 {
 	float sai1, sai2,sai;
 	sai = myrandom(RNGen);
-	float s = material.Kd.norm() + material.Ks.norm();
+	float s = material.Kd.norm() + material.Ks.norm() + material.Kt.norm();
 	float pd = material.Kd.norm()/s;
+	float pr = material.Ks.norm() / s;
 	sai1 = myrandom(RNGen);
 	sai2 = myrandom(RNGen);
 	if (sai < pd)
 	{
 		return SampleLobe(N, sqrt(sai1), 2 * PI * sai2);
 	}
+	float phong = pow(sai1, 1 / (material.alpha + 1.0f));
+	Vector3f m = SampleLobe(N, phong, 2 * PI * sai2);
+	if (sai < pd + pr)
+	{
+		return (2 * (w0.dot(m)) * m) - w0;
+	}
 	else
 	{
-		float phong = pow(sai1, 1 / (material.alpha + 1.0f));
-		Vector3f m = SampleLobe(N, phong, 2 * PI * sai2);
-		return (2 * (w0.dot(m)) * m) - w0;
+		float Eta, EtaI, EtaO;
+		if (w0.dot(N) > 0.0f)
+		{
+			EtaI = 1.0f;
+			EtaO = material.IOR;
+		}
+		else
+		{
+			EtaO = 1.0f;
+			EtaI = material.IOR;
+		}
+		Eta = EtaI / EtaO;
+		float r = 1.0f - ( Eta * Eta * (1.0f - pow(w0.dot(m), 2)) );
+		if (r < 0.0f)
+		{
+			return (2 * (w0.dot(m)) * m) - w0;
+		}
+		else
+		{
+			float sign = (w0.dot(N) >= 0.0f) ? 1 : -1;
+			return  (Eta * (w0.dot(m)) - sign * sqrt(r)) * m - Eta * w0; ///MAYBE HERE IS OFF
+		}
 	}
 }
 
@@ -808,7 +905,7 @@ Vector3f Realtime::TracePath(Ray ray)
 			BVMinimize(Tree, miniI);
 			if (!signbit(p) && I.objectHit != nullptr && I.objectHit == L.objectHit)
 			{
-				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material);
+				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material, P.t);
 				C += W.cwiseProduct(wS*EvalRadiance(L.objectHit)).cwiseProduct(f / p);
 			}
 		}
@@ -823,7 +920,7 @@ Vector3f Realtime::TracePath(Ray ray)
 		BVMinimize(Tree, miniQ);
 		if (Q.objectHit == nullptr)
 			break;
-		Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material);
+		Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material, P.t);
 		float p = PdfBRDF(N, wi,*P.objectHit->material,w0) * RussianRoulette;
 		if (p < pow(10.0f, -6))
 			break;

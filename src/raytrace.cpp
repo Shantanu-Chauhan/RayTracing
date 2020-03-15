@@ -116,7 +116,7 @@ void Scene::Command(const std::vector<std::string>& strings,
         // First rgb is Diffuse reflection, second is specular reflection.
         // third is beer's law transmission followed by index of refraction.
         // Creates a Material instance to be picked up by successive shapes
-        currentMat = new Material(Vector3f(f[1], f[2], f[3]), Vector3f(f[4], f[5], f[6]), f[7]); }
+        currentMat = new Material(Vector3f(f[1], f[2], f[3]), Vector3f(f[4], f[5], f[6]), f[7],Vector3f(f[8], f[9], f[10]),f[11]); }
 
     else if (c == "light") {
         // syntax: light  r g b   

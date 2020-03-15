@@ -11,16 +11,16 @@ const float PI = 3.14159f;
 class Material
 {
  public:
-    Vector3f Kd, Ks;
-    float alpha;
+    Vector3f Kd, Ks,Kt;
+    float alpha,IOR;
     unsigned int texid;
 
     virtual bool isLight() { return false; }
 
-    Material()  : Kd(Vector3f(1.0, 0.5, 0.0)), Ks(Vector3f(1,1,1)), alpha(1.0), texid(0) {}
-    Material(const Vector3f d, const Vector3f s, const float a) 
-        : Kd(d), Ks(s), alpha(a), texid(0) {}
-    Material(Material& o) { Kd=o.Kd;  Ks=o.Ks;  alpha=o.alpha;  texid=o.texid; }
+    Material()  : Kd(Vector3f(1.0, 0.5, 0.0)), Ks(Vector3f(1,1,1)), alpha(1.0), texid(0),Kt(Vector3f(0.0f,0.0f,0.0f)),IOR(1.0f) {}
+    Material(const Vector3f d, const Vector3f s, const float a , Vector3f t,float i) 
+        : Kd(d), Ks(s), alpha(a), texid(0),Kt(t),IOR(i) {}
+	Material(Material& o) { Kd = o.Kd;  Ks = o.Ks;  alpha = o.alpha;  texid = o.texid; Kt = o.Kt; IOR = o.IOR; }
 
     void setTexture(const std::string path);
     //virtual void apply(const unsigned int program);
