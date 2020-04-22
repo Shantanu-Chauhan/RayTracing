@@ -77,14 +77,15 @@ public:
     int width, height;
     Realtime* realtime;         // Remove this (realtime stuff)
     Material* currentMat;
-
     Scene();
+	void ReadHdrImage(const std::string inName, std::vector<float>& image,
+		int& width, int& height);
     void Finit();
 
     // The scene reader-parser will call the Command method with the
     // contents of each line in the scene file.
     void Command(const std::vector<std::string>& strings,
-                 const std::vector<float>& f);
+                  std::vector<float>& f);
 
     // To read a model file into the scene via ASSIMP, call ReadAssimpFile.  
     void ReadAssimpFile(const std::string& path, const Matrix4f& M);

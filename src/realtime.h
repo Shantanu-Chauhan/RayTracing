@@ -63,10 +63,20 @@ public:
     char motionkey;
     float speed;
 	Color* ImagePointer;
+
+	std::vector<float> SkyDome;
+	int SkyDomeWidth;
+	int SkyDomeHeight;
+	float SkyDomeRadius;
+	float* pBuffer;
+	float* pUDist;
     // Camera/viewing parameters
     Vector3f ambient;
     Vector3f eye;      // Position of eye for viewing scene
     Quaternionf orient;   // Represents rotation of -Z to view direction
+	float D;// Distance from the eye to the plane of focus(in world coordinates)
+	float W; // Size of the circle of confusion(in fraction of screen size e.g. 0.1)
+	bool DOF;
     float ry;
     float front, back;
     float spin, tilt;
@@ -96,8 +106,10 @@ public:
 
     int width, height;
     void setScreen(const int _width, const int _height) { width=_width;  height=_height; }
-    void setCamera(const Vector3f& _eye, const Quaternionf& _o, const float _ry)
-    { eye=_eye; orient=_o; ry=_ry; }
+    void setCamera(const Vector3f& _eye, const Quaternionf& _o, const float _ry,float _d,float _w,int _DOF)
+	{
+		eye = _eye; orient = _o; ry = _ry; D = _d; W = _w; DOF = _DOF;
+	}
     void setAmbient(const Vector3f& _a) { ambient = _a; }
     int setTexture(const int width, const int height, unsigned char* image);
     

@@ -41,7 +41,6 @@ void ReadScene(const std::string inName, Scene* scene)
     for (std::string line; getline(input, line); ) {
         std::vector<std::string> strings;
         std::vector<float> floats;
-        
         // Parse as parallel lists of strings and floats
         std::stringstream lineStream(line);
         for (std::string s; lineStream >> s; ) { // Parses space-separated strings until EOL

@@ -26,8 +26,40 @@
 //std::mt19937_64 RNGen;
 //std::uniform_real_distribution<> myrandom(0.0, 1.0);
 // Call myrandom(RNGen) to get a uniformly distributed random number in [0,1].
+#include"rgbe.h"
+void Scene::ReadHdrImage(const std::string inName, std::vector<float>& image,
+	int& width, int& height)
+{
+	rgbe_header_info info;
+	char errbuf[100] = { 0 };
 
-Scene::Scene() 
+	// Open file and read width and height from the header
+	FILE* fp = fopen(inName.c_str(), "rb");
+	if (!fp) {
+		printf("Can't open file: %s\n", inName.c_str());
+		return;
+	}
+	int rc = RGBE_ReadHeader(fp, &width, &height, &info, errbuf);
+	if (rc != RGBE_RETURN_SUCCESS) {
+		printf("RGBE read error: %s\n", errbuf);
+		return;
+	}
+
+	// Allocate enough memory
+	image.resize(3 * width * height);
+
+	// Read the pixel data and close the file
+	rc = RGBE_ReadPixels_RLE(fp, &image[0], width, height, errbuf);
+	if (rc != RGBE_RETURN_SUCCESS) {
+		printf("RGBE read error: %s\n", errbuf);
+		return;
+	}
+	fclose(fp);
+
+	printf("Read %s (%dX%d)\n", inName.c_str(), width, height);
+}
+
+Scene::Scene()
 { 
     realtime = new Realtime(); 
 }
@@ -86,8 +118,33 @@ void Material::setTexture(const std::string path)
     stbi_image_free(image);
 }
 
+void PreProcess(float** pBuffer,float** pUDist,int width,int height,std::vector<float>& image)
+{
+	// Pre-processing step: Marginal and conditional CDF
+	*pBuffer = new float[width * (height + 1)];
+	*pUDist = &(*pBuffer)[width * height];
+	float* pSinTheta = new float[height];
+	float angleFrac = PI / float(height);
+	float theta = angleFrac * 0.5f;
+	for (unsigned int i = 0; i < height; i++, theta += angleFrac)
+		pSinTheta[i] = sin(theta);
+	for (unsigned int i = 0, m = 0; i < width; i++, m += height) {
+		float* pVDist = &(*pBuffer)[m];
+		unsigned int k = i * 3;
+		pVDist[0] = 0.2126f * image[k + 0] + 0.7152f * image[k + 1] + 0.0722f * image[k + 2];
+		pVDist[0] *= pSinTheta[0];
+		for (unsigned int j = 1, k = (width + i) * 3; j < height; j++, k += width * 3) {
+			float lum = 0.2126 * image[k + 0] + 0.7152 * image[k + 1] + 0.0722 * image[k + 2];
+			pVDist[j] = pVDist[j - 1] + lum * pSinTheta[j];
+		}
+		if (i == 0)
+			(*pUDist)[i] = pVDist[height - 1];
+		else
+			(*pUDist)[i] = (*pUDist)[i - 1] + pVDist[height - 1];
+	}
+}
 void Scene::Command(const std::vector<std::string>& strings,
-                    const std::vector<float>& f)
+                     std::vector<float>& f)
 {
     if (strings.size() == 0) return;
     std::string c = strings[0];
@@ -98,10 +155,24 @@ void Scene::Command(const std::vector<std::string>& strings,
         width = int(f[1]);
         height = int(f[2]); }
 
+	else if (c == "skydome") {
+		
+		// syntax: screen width height
+		std::string file = "skyDome.hdr";
+		ReadHdrImage(file, realtime->SkyDome, realtime->SkyDomeWidth, realtime->SkyDomeHeight);
+		PreProcess(&(realtime->pBuffer), &(realtime->pUDist), realtime->SkyDomeWidth, realtime->SkyDomeHeight, realtime->SkyDome);
+		realtime->SkyDomeRadius = f[4];
+		realtime->sphere(Vector3f(f[1], f[2], f[3]), f[4], currentMat);
+	}
+
     else if (c == "camera") {
         // syntax: camera x y z   ry   <orientation spec>
         // Eye position (x,y,z),  view orientation (qw qx qy qz),  frustum height ratio ry
-        realtime->setCamera(Vector3f(f[1],f[2],f[3]), Orientation(5,strings,f), f[4]); }
+        realtime->setCamera(Vector3f(f[1],f[2],f[3]), Orientation(5,strings,f), f[4],f[10],f[11],f[12]); 
+	/*	f[5] = 0.0;
+		f[6] = 0.0;*/
+	}
+
 
     else if (c == "ambient") {
         // syntax: ambient r g b

@@ -43,7 +43,10 @@ bool Sphere::Intersect(Ray* ray, Intersection& intersection)
 		resultT = T1;
 	else if (T2 < T1 && T2>epsilon)
 		resultT = T2;
-
+	else if (!signbit(T1) && T1 > epsilon)
+		resultT = T1;
+	else if (!signbit(T2) && T2 > epsilon)
+		resultT = T2;
 	if (resultT < intersection.t)
 	{
 		intersection.t = resultT;
@@ -117,6 +120,28 @@ bool Box::Intersect(Ray* ray, Intersection& intersection)
 				intersection.P = ray->eval(solution.T1);
 				intersection.N = solution.N1.normalized();
 				intersection.t = solution.T1;
+				intersection.objectHit = this->parent;
+				return true;
+			}
+		}
+		else if (!signbit(solution.T1) && solution.T1> epsilon)
+		{
+			if (solution.T1 < intersection.t)
+			{
+				intersection.P = ray->eval(solution.T1);
+				intersection.N = solution.N1.normalized();
+				intersection.t = solution.T1;
+				intersection.objectHit = this->parent;
+				return true;
+			}
+		}
+		else if (!signbit(solution.T0 ) && solution.T0 > epsilon)
+		{
+			if (solution.T0 < intersection.t)
+			{
+				intersection.P = ray->eval(solution.T0);
+				intersection.N = solution.N0.normalized();
+				intersection.t = solution.T0;
 				intersection.objectHit = this->parent;
 				return true;
 			}

@@ -17,7 +17,7 @@
 #include  <iterator>
 std::mt19937_64 RNGen;
 std::uniform_real_distribution<> myrandom(0.0, 1.0);
-
+float angle = 0.0f;
 // Stupid C++ needs callbacks to be static functions.
 static Realtime* globalRealtime = nullptr;
 void CBDrawScene() { globalRealtime->DrawScene(); }
@@ -377,6 +377,8 @@ Realtime::Realtime()
 	rightDown = false;
 	motionkey = 0;
 
+	//D = 1.1f;
+	//W = 1.0f;
 }
 
 // This function enters the event loop.
@@ -492,7 +494,7 @@ void Realtime::DrawScene()
 		loc = glGetUniformLocation(lighting.program, "ModelTr");
 		glUniformMatrix4fv(loc, 1, GL_FALSE, modelTR.data());
 
-		loc = glGetUniformLocation(lighting.program, "normalTR");
+		loc = glGetUniformLocation(lighting.program, "normaclTR");
 		glUniformMatrix3fv(loc, 1, GL_FALSE, normalTR.data());
 
 		if (!material) {
@@ -556,10 +558,41 @@ namespace Eigen
 const float RussianRoulette = 0.8f;
 
 
-Vector3f EvalRadiance(Obj* O)
+//Vector3f EvalRadiance(Obj* O)
+//{
+//	return O->material->Kd;
+//}
+Vector3f EvalRadiance(const Intersection& A,int SkyDomeWidth,int SkyDomeHeight,std::vector<float>& image)
 {
-	return O->material->Kd;
+	Vector3f P = A.P.normalized();
+	double u = (angle - atan2(P[1], P[0])) / (PI*2.0f);
+	u = u - floor(u); // Wrap to be within 0...1
+	double multiplier = 10.0f;
+	double v = acos(P[2]) / PI;
+	int i0 = floor(u * SkyDomeWidth);
+	int j0 = floor(v * SkyDomeHeight);
+	double uw[2], vw[2];
+	uw[1] = u * SkyDomeWidth - i0; 
+	uw[0] = 1.0 - uw[1];
+	vw[1] = v * SkyDomeHeight - j0; 
+	vw[0] = 1.0 - vw[1];
+	Vector3f r(0.0f, 0.0f, 0.0f);
+	for (int i = 0; i < 2; i++) {
+		for (int j = 0; j < 2; j++) {
+			int k = 3 * (((j0 + j) % SkyDomeHeight) * SkyDomeWidth + ((i0 + i) % SkyDomeWidth));
+			for (int c = 0; c < 3; c++) {
+			/*	if (u > 0.57 && u<0.62 && v>0.37 && v < 0.44)
+				{
+					r[c] += multiplier* uw[i] * vw[j] * image[k + c];
+				}
+				else*/
+				r[c] += uw[i] * vw[j] * image[k + c];
+			}
+		}
+	}
+	return r;
 }
+
 Vector3f SampleLobe(Vector3f N, float c, float phi)
 {
 	float s = sqrt(1.0f - (c * c));
@@ -574,12 +607,12 @@ float CalcG(Vector3f v, Vector3f m,float alpha,Vector3f N)
 {
 	float Xi;
 	float term = v.dot(m) / v.dot(N);
-	float TanThetaV = sqrt(1.0f - pow(v.dot(N), 2)) / v.dot(N);
+	float TanThetaV = sqrt(1.0f - pow(v.dot(N), 2)) / fabs(v.dot(N));
 	if (TanThetaV == 0.0f)
 		return 1.0f;
-	float a = sqrt((alpha / 2) + 1.0f) / TanThetaV;
 	if (v.dot(N) > 1.0f)
 		return 1.0f;
+	float a = sqrt((alpha / 2) + 1.0f) / TanThetaV;
 	if (term > 0.0f)
 		Xi = 1.0f;
 	else
@@ -598,8 +631,9 @@ float CalcG(Vector3f v, Vector3f m,float alpha,Vector3f N)
 
 //CalcG for GGX
 
-//float CalcG(Vector3f v, Vector3f m, float alpha, Vector3f N)
+//float CalcG(Vector3f v, Vector3f m, float _alpha, Vector3f N)
 //{
+//	float alpha = sqrt(2.0f / (_alpha + 2.0f));
 //	float Xi;
 //	float term = v.dot(m) / v.dot(N);
 //	float TanThetaV = sqrt(1.0f - pow(v.dot(N), 2)) / v.dot(N);
@@ -609,19 +643,19 @@ float CalcG(Vector3f v, Vector3f m,float alpha,Vector3f N)
 //		Xi = 1.0f;
 //	else
 //		Xi = 0.0f;
-//	if (TanThetaV == 0.0f || isnan(TanThetaV))
+//	if (TanThetaV == 0.0f)
 //		return 1.0f;
 //	float num = Xi * 2.0f;
 //	float denom = 1 + (sqrt(1.0f + (alpha * alpha * TanThetaV * TanThetaV)));
 //	return num / denom;
 //}
 
-float CalcG(Vector3f wi, Vector3f w0, Vector3f m,float _alpha,Vector3f N)
+float CalcG(Vector3f wi, Vector3f w0, Vector3f m, float _alpha, Vector3f N)
 {
-	//float alpha = sqrt(2.0f / (_alpha + 2.0f));
-	return CalcG(wi, m, _alpha,N) * CalcG(w0, m, _alpha,N);
+	return CalcG(wi, m, _alpha, N) * CalcG(w0, m, _alpha, N);
 }
-Vector3f CalcF(float LDotH,Vector3f Ks)
+
+Vector3f CalcF(float LDotH, Vector3f Ks)
 {
 	return Ks + ((Vector3f(1.0f, 1.0f, 1.0f) - Ks) * pow(1.0f - fabs(LDotH), 5));
 }
@@ -654,21 +688,19 @@ float CalcD(Vector3f m, Vector3f N, float alpha) {
 //		XI = 0.0f;
 //	float alphasq = alpha * alpha;
 //	float numerator = XI * alphasq;
-//	float denom = PI * (pow(N.dot(m),4)) * pow(alphasq + pow(TanThetaM,2),2);
+//	float denom = PI * (pow(N.dot(m), 4)) * pow(alphasq + pow(TanThetaM, 2), 2);
 //	float D = numerator / denom;
-//	if (isnan(D))
-//		return 1.0f;
 //	return D;
 //}
 
 
-Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd,Vector3f w0,Material material,float t)
+Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd, Vector3f w0, Material material, float t)
 {
 	Vector3f Ed = material.Kd / PI;
 	Vector3f m = (w0 + wi).normalized();
-	Vector3f Er = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N)*CalcF((wi.dot(m)), material.Ks);
-	Er = Er / (4 * fabs(wi.dot(N))* fabs(w0.dot(N)));
-	Vector3f Et;
+	Vector3f Er = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N) * CalcF((wi.dot(m)), material.Ks);
+	Er = Er / (4 * fabs(wi.dot(N)) * fabs(w0.dot(N)));
+	Vector3f Et = Vector3f(0.0f, 0.0f, 0.0f);
 	float Eta, EtaI, EtaO;
 	if (w0.dot(N) > 0.0f)
 	{
@@ -688,16 +720,20 @@ Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd,Vector3f w0,Materia
 	if (w0.dot(N) < 0.0f)
 	{
 		float X, Y, Z;
-		X = exp(-t * log(material.Kt.x()));
-		Y = exp(-t * log(material.Kt.y()));
-		Z = exp(-t * log(material.Kt.z()));
-		At = Vector3f(0.0f, 1.0f, 0.0f);
+		//X = exp(t * log(material.Kt.x()));
+		X = pow(material.Kt.x(),t);
+		//Y = exp(t * log(material.Kt.y()));
+		Y = pow(material.Kt.y(), t);
+		//Z = exp(t * log(material.Kt.z()));
+		Z = pow(material.Kt.z(), t);
+		At = Vector3f(X, Y, Z);
 	}
 	else
 	{
-		At = Vector3f(1.0f,1.0f,1.0f);
+		At = Vector3f(1.0f, 1.0f, 1.0f);
 	}
-	if (r<0.0f)
+
+	if (r < 0.0f)
 	{
 		Et = Er.cwiseProduct(At);
 	}
@@ -705,26 +741,26 @@ Vector3f EvalScattering(Vector3f N, Vector3f wi, Vector3f Kd,Vector3f w0,Materia
 	{
 		Vector3f num;
 		float denom;
-		num = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N) * 
-			( Vector3f(1.0f,1.0f,1.0f) - CalcF((wi.dot(m)), material.Ks)) * fabs(wi.dot(m)) * fabs(w0.dot(m)) * EtaO*EtaO ;
+		num = CalcD(m, N, material.alpha) * CalcG(wi, w0, m, material.alpha, N) *
+			(Vector3f(1.0f, 1.0f, 1.0f) - CalcF((wi.dot(m)), material.Ks)) * fabs(wi.dot(m)) * fabs(w0.dot(m)) * EtaO * EtaO;
 		denom = fabs(wi.dot(N)) * fabs(w0.dot(N)) * pow(EtaO * wi.dot(m) + EtaI * w0.dot(m), 2);
 		Et = num / denom;
 		Et = Et.cwiseProduct(At);
 	}
-	return fabs(N.dot(wi)) * (Ed + Er+ Et);
+	return fabs(N.dot(wi)) * (Ed + Er + Et);
 }
 
-float PdfBRDF(Vector3f N, Vector3f wi,Material material,Vector3f w0)
+float PdfBRDF(Vector3f N, Vector3f wi, Material material, Vector3f w0)
 {
-	float s = material.Kd.norm() + material.Ks.norm()+material.Kt.norm();
+	float s = material.Kd.norm() + material.Ks.norm() + material.Kt.norm();
 	float pd = material.Kd.norm() / s;
 	float pr = material.Ks.norm() / s;
 	float pt = material.Kt.norm() / s;
 	Vector3f m = (w0 + wi).normalized();
 	float numerator = CalcD(m, N, material.alpha) * fabs(m.dot(N));
 	float denom = 4 * fabs(wi.dot(m));
-	float Pr = numerator/denom;
-	float Pd = fabs(wi.dot(N))/PI;
+	float Pr = numerator / denom;
+	float Pd = fabs(wi.dot(N)) / PI;
 	float Pt;
 	float Eta, EtaI, EtaO;
 	if (w0.dot(N) > 0.0f)
@@ -740,7 +776,7 @@ float PdfBRDF(Vector3f N, Vector3f wi,Material material,Vector3f w0)
 	Eta = EtaI / EtaO;
 	m = -(EtaO * wi + EtaI * w0).normalized();
 	float r = 1.0f - (Eta * Eta * (1.0f - pow(w0.dot(m), 2)));
-	if (r<0.0f)
+	if (r < 0.0f)
 	{
 		Pt = Pr;
 	}
@@ -751,17 +787,17 @@ float PdfBRDF(Vector3f N, Vector3f wi,Material material,Vector3f w0)
 		denom = pow(EtaO * wi.dot(m) + EtaI * w0.dot(m), 2);//Mayeb herer
 		Pt = num / denom;
 	}
-	return pd*Pd+pr*Pr + pt*Pt;
+	return pd * Pd + pr * Pr + pt * Pt;
 }
 
-//Phong SampleBrdf underneath
+//SampleBrdf underneath
 
-Vector3f SampleBRDF(Vector3f w0,Vector3f N,Material material)
+Vector3f SampleBRDF(Vector3f w0, Vector3f N, Material material)
 {
-	float sai1, sai2,sai;
+	float sai1, sai2, sai;
 	sai = myrandom(RNGen);
 	float s = material.Kd.norm() + material.Ks.norm() + material.Kt.norm();
-	float pd = material.Kd.norm()/s;
+	float pd = material.Kd.norm() / s;
 	float pr = material.Ks.norm() / s;
 	sai1 = myrandom(RNGen);
 	sai2 = myrandom(RNGen);
@@ -770,7 +806,12 @@ Vector3f SampleBRDF(Vector3f w0,Vector3f N,Material material)
 		return SampleLobe(N, sqrt(sai1), 2 * PI * sai2);
 	}
 	float phong = pow(sai1, 1 / (material.alpha + 1.0f));
+	//float alpha = sqrt(2.0f / (material.alpha + 2.0f));
+	//float value = (alpha * sqrt(sai1)) / (sqrt(1 - sai1));
+	//float GGX = cos(atan(value));
+	//Vector3f m = SampleLobe(N, GGX, 2 * PI * sai2).normalized();
 	Vector3f m = SampleLobe(N, phong, 2 * PI * sai2);
+
 	if (sai < pd + pr)
 	{
 		return (2 * (w0.dot(m)) * m) - w0;
@@ -789,40 +830,19 @@ Vector3f SampleBRDF(Vector3f w0,Vector3f N,Material material)
 			EtaI = material.IOR;
 		}
 		Eta = EtaI / EtaO;
-		float r = 1.0f - ( Eta * Eta * (1.0f - pow(w0.dot(m), 2)) );
+		float r = 1.0f - (Eta * Eta * (1.0f - pow(w0.dot(m), 2)));
 		if (r < 0.0f)
 		{
 			return (2 * (w0.dot(m)) * m) - w0;
 		}
 		else
 		{
-			float sign = (w0.dot(N) >= 0.0f) ? 1 : -1;
+			float sign = (w0.dot(N) >= 0.0f) ? 1.0f : -1.0f;
 			return  (Eta * (w0.dot(m)) - sign * sqrt(r)) * m - Eta * w0; ///MAYBE HERE IS OFF
 		}
 	}
 }
 
-//Vector3f SampleBRDF(Vector3f w0, Vector3f N, Material material)
-//{
-//	float sai1, sai2, sai;
-//	sai = myrandom(RNGen);
-//	float s = material.Kd.norm() + material.Ks.norm();
-//	float pd = material.Kd.norm() / s;
-//	sai1 = myrandom(RNGen);
-//	sai2 = myrandom(RNGen);
-//	if (sai < pd)
-//	{
-//		return SampleLobe(N, sqrt(sai1), 2 * PI * sai2);
-//	}
-//	else
-//	{
-//		float alpha = sqrt(2.0f / (material.alpha + 2.0f));
-//		float value = (alpha * sqrt(sai1)) / (sqrt(1 - sai1));
-//		float GGX = cos(atan(value));
-//		Vector3f m = SampleLobe(N, GGX, 2 * PI * sai2).normalized();
-//		return (2 * fabs(w0.dot(m)) * m) - w0;
-//	}
-//}
 
 template<typename Iter, typename RandomGenerator>
 Iter select_randomly(Iter start, Iter end, RandomGenerator& g) {
@@ -840,21 +860,41 @@ Iter select_randomly(Iter start, Iter end) {
 
 Intersection Realtime::SampleLight()
 {
-	Intersection test;
-	Obj* L = *select_randomly(lights.begin(), lights.end());
-	//SampleSphere
-	Vector3f center = static_cast<Sphere*>(L->shape)->center;
-	float radius = static_cast<Sphere*>(L->shape)->radius;
-	float sai1, sai2;
-	sai1 = myrandom(RNGen);
-	sai2 = myrandom(RNGen);
-	float z = 2 * sai1 - 1.0f;
-	float r = sqrt(1 - (z * z));
-	float a = 2 * PI * sai2;
-	test.N = Vector3f(r * cos(a), r * sin(a), z).normalized();
-	test.P = center + (radius * test.N);
-	test.objectHit = L;
-	return test;
+	//Intersection test;
+	//Obj* L = *select_randomly(lights.begin(), lights.end());
+	////SampleSphere
+	//Vector3f center = static_cast<Sphere*>(L->shape)->center;
+	//float radius = static_cast<Sphere*>(L->shape)->radius;
+	//float sai1, sai2;
+	//sai1 = myrandom(RNGen);
+	//sai2 = myrandom(RNGen);
+	//float z = 2 * sai1 - 1.0f;
+	//float r = sqrt(1 - (z * z));
+	//float a = 2 * PI * sai2;
+	//test.N = Vector3f(r * cos(a), r * sin(a), z).normalized();
+	//test.P = center + (radius * test.N);
+	//test.objectHit = L;
+	//return test;
+	Intersection B;
+
+	double u = myrandom(RNGen);
+	double v = myrandom(RNGen);
+	float maxUVal = pUDist[SkyDomeWidth - 1];
+	float* pUPos = std::lower_bound(pUDist, pUDist + SkyDomeWidth,
+		u * maxUVal);
+	int iu = pUPos - pUDist;
+	float* pVDist = &pBuffer[SkyDomeHeight * iu];
+	float* pVPos = std::lower_bound(pVDist, pVDist + SkyDomeHeight,
+		v * pVDist[SkyDomeHeight - 1]);
+	int iv = pVPos - pVDist;
+	double phi = angle - 2 * PI * iu / SkyDomeWidth;
+	double theta = PI * iv / SkyDomeHeight;
+	B.N = Vector3f(sin(theta) * cos(phi),
+		sin(theta) * sin(phi),
+		cos(theta));
+	B.P = B.N * SkyDomeRadius;
+	//B.objectHit = this;
+	return B;
 }
 
 float GeometryFactor(Intersection A, Intersection B)
@@ -866,10 +906,32 @@ float GeometryFactor(Intersection A, Intersection B)
 	return fabs((AnDotD * BnDotD) / DdotDSq);
 }
 
-float PdfLight(Obj* O, int NumberOfLights)
-{
-	return 1 / (O->shape->Area() * NumberOfLights);
+
+
+//float PdfLight(Obj* O, int NumberOfLights)
+//{
+//	return 1 / (O->shape->Area() * NumberOfLights);
+//}
+float PdfLight(const Intersection& B,float*pBuffer,float*pUDist,int SkyDomeWidth,int SkyDomeHeight,float SkyDomeRadius)  {
+	Vector3f P = B.P.normalized();
+	double fu = (angle - atan2(P[1], P[0])) / (PI*2.0f);
+	fu = fu - floor(fu); // Wrap to be within 0...1
+	int u = floor(SkyDomeWidth * fu);
+	int v = floor(SkyDomeHeight * acos(P[2]) / PI);
+	float angleFrac = PI / float(SkyDomeHeight);
+	float* pVDist = &pBuffer[SkyDomeHeight * u];
+	float pdfU = (u == 0) ? (pUDist[0]) : (pUDist[u] - pUDist[u - 1]);
+	pdfU /= pUDist[SkyDomeWidth - 1];
+	pdfU *= SkyDomeWidth / (PI*2.0f);
+	float pdfV = (v == 0) ? (pVDist[0]) : (pVDist[v] - pVDist[v - 1]);
+	pdfV /= pVDist[SkyDomeHeight - 1];
+	pdfV *= SkyDomeHeight / PI;
+	float theta = angleFrac * 0.5 + angleFrac * v;
+	float pdf = pdfU * pdfV * sin(theta) / (4.0 * PI * SkyDomeRadius * SkyDomeRadius);
+	//printf("(%f %f %f) %d %d %g\n", P[0], P[1], P[2], u, v, pdf);
+	return pdf;
 }
+
 Vector3f Realtime::TracePath(Ray ray)
 {
 	Vector3f C(0.0f, 0.0f, 0.0f);	//Accumulated light
@@ -877,12 +939,14 @@ Vector3f Realtime::TracePath(Ray ray)
 	Intersection P;// = new Intersection();
 	Minimizer miniP(&ray, &P);
 	BVMinimize(Tree, miniP);
-	
+
 	if (P.objectHit == nullptr)
 		return C;
+		//return EvalRadiance(P, SkyDomeWidth, SkyDomeHeight, SkyDome);
 	if (P.objectHit->material->isLight())
 	{
-		return EvalRadiance(P.objectHit);
+		//return EvalRadiance(P.objectHit);
+		return EvalRadiance(P,SkyDomeWidth,SkyDomeHeight,SkyDome);
 	}
 	Vector3f w0 = -ray.D;
 	while (myrandom(RNGen) <= RussianRoulette)
@@ -893,7 +957,7 @@ Vector3f Realtime::TracePath(Ray ray)
 		if (check)
 		{
 			Intersection L = SampleLight();
-			float p = PdfLight(L.objectHit, lights.size()) / GeometryFactor(P, L);
+			float p = PdfLight(L,pBuffer,pUDist,SkyDomeWidth,SkyDomeHeight,SkyDomeRadius) / GeometryFactor(P, L);
 			Vector3f wi = (L.P - P.P).normalized();
 			float qS = PdfBRDF(N, wi, *P.objectHit->material, w0) * RussianRoulette;
 			float wS = p * p / (qS * qS + p * p);
@@ -905,31 +969,30 @@ Vector3f Realtime::TracePath(Ray ray)
 			BVMinimize(Tree, miniI);
 			if (!signbit(p) && I.objectHit != nullptr && I.objectHit == L.objectHit)
 			{
-				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material, P.t);
-				C += W.cwiseProduct(wS*EvalRadiance(L.objectHit)).cwiseProduct(f / p);
+				Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd, w0, *P.objectHit->material, P.t);
+				C += W.cwiseProduct(wS * EvalRadiance(L,SkyDomeWidth,SkyDomeHeight,SkyDome)).cwiseProduct(f / p);
 			}
 		}
 		//Implicit Light Correction
-		Vector3f wi = SampleBRDF(w0,N,*P.objectHit->material).normalized();
-		//wi.normalize();
+		Vector3f wi = SampleBRDF(w0, N, *P.objectHit->material).normalized();
 		Intersection Q;
 		Ray NewRay;
 		NewRay.D = wi;
 		NewRay.Q = P.P;
 		Minimizer miniQ(&NewRay, &Q);
 		BVMinimize(Tree, miniQ);
+		Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd, w0, *P.objectHit->material, P.t);
+		float p = PdfBRDF(N, wi, *P.objectHit->material, w0) * RussianRoulette;
 		if (Q.objectHit == nullptr)
 			break;
-		Vector3f f = EvalScattering(N, wi, P.objectHit->material->Kd,w0,*P.objectHit->material, P.t);
-		float p = PdfBRDF(N, wi,*P.objectHit->material,w0) * RussianRoulette;
 		if (p < pow(10.0f, -6))
 			break;
 		W = W.cwiseProduct(f / p);
 		if (Q.objectHit->material->isLight())
 		{
-			float qS = PdfLight(Q.objectHit, lights.size()) / GeometryFactor(P, Q);
+			float qS = PdfLight(Q,pBuffer,pUDist,SkyDomeWidth,SkyDomeHeight,SkyDomeRadius) / GeometryFactor(P, Q);
 			float wS = p * p / (qS * qS + p * p);
-			C += W.cwiseProduct(wS*EvalRadiance(Q.objectHit));
+			C += W.cwiseProduct(wS * EvalRadiance(Q,SkyDomeWidth,SkyDomeHeight,SkyDome));
 			break;
 		}
 		P = Q;
@@ -940,10 +1003,10 @@ Vector3f Realtime::TracePath(Ray ray)
 
 void Realtime::RayTracerDrawScene()
 {
-	/*Color* image = new Color[width * height];
+	Color* image = new Color[width * height];
 	for (int y = 0; y < height; y++)
 		for (int x = 0; x < width; x++)
-			image[y * width + x] = Color(0, 0, 0);*/
+			image[y * width + x] = Color(0, 0, 0);
 	float rx = (ry * width) / height;
 	Vector3f X = rx * ViewQuaternion()._transformVector(Vector3f::UnitX());
 	Vector3f Y = ry * ViewQuaternion()._transformVector(Vector3f::UnitY());
@@ -967,6 +1030,15 @@ void Realtime::RayTracerDrawScene()
 				Ray ray;
 				ray.Q = eye;
 				ray.D = direction;
+				if (DOF)
+				{
+					float r = W * sqrt(myrandom(RNGen));
+					float theta = 2 * PI * r * myrandom(RNGen);
+					float Newrx = r * cos(theta);
+					float Newry = r * sin(theta);
+					ray.D = Vector3f((D * dx - Newrx) * X + Y * (D * dy - Newry) + D * Z).normalized();
+					ray.Q = eye + Newrx * X + Newry * Y;
+				}
 				//Intersection* frontMost = new Intersection();
 				//Minimizer mini(&ray, frontMost);
 				//float minDist = BVMinimize(Tree, mini);
@@ -977,7 +1049,7 @@ void Realtime::RayTracerDrawScene()
 				}*/
 				Vector3f color;
 				color = TracePath(ray);
-				if (isnan(color.x())||isnan(color.y()) || isnan(color.z()) || isinf(color.x()) || isinf(color.y()) || isinf(color.z()))
+				if (isnan(color.x()) || isnan(color.y()) || isnan(color.z()) || isinf(color.x()) || isinf(color.y()) || isinf(color.z()))
 				{
 					continue;
 				}
@@ -1011,9 +1083,7 @@ void Realtime::RayTracerDrawScene()
 			}
 		}
 		{
-			/*for (int y1 = 0; y1 < height; y1++)
-				for (int x1 = 0; x1 < width; x1++)
-					image[y1 * width + x1] = ImagePointer[y1 * width + x1]/i;*/
+
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			rayTracer.Use();
@@ -1035,8 +1105,11 @@ void Realtime::RayTracerDrawScene()
 			glUniform1i(loc, 1);
 			DrawFSQ();
 			glutSwapBuffers();
-			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1||i==1024||i==256 || i==4096)
+			if (i == 512 || i == 2048 || i == 8 || i == 64 || i == 1 || i == 1024 || i == 256 || i == 4096)
 			{
+				for (int y1 = 0; y1 < height; y1++)
+					for (int x1 = 0; x1 < width; x1++)
+						image[y1 * width + x1] = ImagePointer[y1 * width + x1] / i;
 				fprintf(stderr, "Image written\n");
 				std::string inName;
 				if (i == 1)
@@ -1058,7 +1131,7 @@ void Realtime::RayTracerDrawScene()
 				std::string hdrName = inName;
 
 				hdrName.replace(hdrName.size() - 3, hdrName.size(), "hdr");
-				WriteHdrImage(hdrName, width, height, ImagePointer);
+				WriteHdrImage(hdrName, width, height, image);
 			}
 		}
 	}
